@@ -1,6 +1,7 @@
 import csv
 import io
-from datetime import date
+import json
+from datetime import date, datetime
 
 from flask import (
     Blueprint,
@@ -12,6 +13,7 @@ from flask import (
     abort,
     g,
     current_app,
+    Response,
 )
 from flask_login import login_required, current_user
 
@@ -267,6 +269,79 @@ def branding_remove_logo():
         log_activity(current_user.id, "branding_logo_removed", "organization_settings", settings.id)
         flash("Logo removed.", "success")
     return redirect(url_for("admin.branding"))
+
+
+# ── Backup & Restore (global admin) ──────────────────────────
+@admin_bp.route("/backup")
+@login_required
+@global_admin_required
+def backup():
+    return render_template("admin/backup.html")
+
+
+@admin_bp.route("/backup/export")
+@login_required
+@global_admin_required
+def backup_export():
+    from app.services.backup import export_backup, BackupEncoder
+
+    data = export_backup()
+    json_str = json.dumps(data, cls=BackupEncoder, indent=2)
+
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    filename = f"budgy_backup_{timestamp}.json"
+
+    log_activity(current_user.id, "backup_exported", "system", None)
+
+    return Response(
+        json_str,
+        mimetype="application/json",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@admin_bp.route("/backup/import", methods=["POST"])
+@login_required
+@global_admin_required
+def backup_import():
+    from app.services.backup import import_backup
+
+    file = request.files.get("backup_file")
+    if not file or not file.filename:
+        flash("Please select a backup JSON file.", "danger")
+        return redirect(url_for("admin.backup"))
+
+    if not file.filename.endswith(".json"):
+        flash("Only JSON files are accepted.", "danger")
+        return redirect(url_for("admin.backup"))
+
+    try:
+        raw = file.read()
+        data = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        flash("Invalid JSON file.", "danger")
+        return redirect(url_for("admin.backup"))
+
+    try:
+        stats = import_backup(data)
+    except ValueError as e:
+        flash(f"Import error: {e}", "danger")
+        return redirect(url_for("admin.backup"))
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Import failed: {e}", "danger")
+        return redirect(url_for("admin.backup"))
+
+    log_activity(current_user.id, "backup_imported", "system", None,
+                 details=json.dumps(stats))
+
+    parts = []
+    for key, count in stats.items():
+        if count > 0:
+            parts.append(f"{count} {key}")
+    summary = ", ".join(parts) if parts else "no new records"
+    flash(f"Import complete: {summary}.", "success")
+    return redirect(url_for("admin.backup"))
 
 
 # ══════════════════════════════════════════════════════════════
