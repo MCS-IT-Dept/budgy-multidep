@@ -7,12 +7,14 @@ from app.models.budget_line_item import BudgetLineItem
 
 
 class TestOtherValidation:
-    def test_other_requires_custom_fields(self, app, db, sample_line_items, sample_fiscal_year, admin_user):
+    def test_other_requires_custom_fields(self, app, db, default_department, sample_line_items, sample_fiscal_year, admin_user):
         """Business rule: If line item is 'Other', custom_account_code and
         custom_account_description are required. This test verifies the logic
         that routes enforce (form-level + route-level check)."""
         with app.app_context():
-            other_item = BudgetLineItem.query.filter_by(code="Other").first()
+            other_item = BudgetLineItem.query.filter_by(
+                code="Other", department_id=default_department.id
+            ).first()
             assert other_item is not None
             assert other_item.is_custom is True
 
@@ -28,14 +30,17 @@ class TestOtherValidation:
                 custom_account_description=None,
                 fiscal_year_id=sample_fiscal_year.id,
                 submitted_by_user_id=admin_user.id,
+                department_id=default_department.id,
                 status="submitted",
             )
             # Model allows null, but route won't — verify the is_custom flag
             assert other_item.is_custom is True
 
-    def test_non_other_does_not_require_custom(self, app, db, sample_line_items, sample_fiscal_year, admin_user):
+    def test_non_other_does_not_require_custom(self, app, db, default_department, sample_line_items, sample_fiscal_year, admin_user):
         with app.app_context():
-            regular_item = BudgetLineItem.query.filter_by(code="72250 336").first()
+            regular_item = BudgetLineItem.query.filter_by(
+                code="72250 336", department_id=default_department.id
+            ).first()
             assert regular_item.is_custom is False
 
             p = Purchase(
@@ -47,6 +52,7 @@ class TestOtherValidation:
                 custom_account_description=None,
                 fiscal_year_id=sample_fiscal_year.id,
                 submitted_by_user_id=admin_user.id,
+                department_id=default_department.id,
                 status="submitted",
             )
             db.session.add(p)

@@ -15,6 +15,7 @@ from flask_login import login_user, logout_user, current_user
 
 from app import db
 from app.models.user import User
+from app.models.department import Department
 from app.services.activity import log_activity
 
 logger = logging.getLogger(__name__)
@@ -33,10 +34,32 @@ def _get_redirect_uri():
     return current_app.config["AZURE_REDIRECT_URI"]
 
 
+def _get_default_department():
+    """Get or create the default department for new user assignment."""
+    dept = Department.query.filter_by(slug="default").first()
+    if dept is None:
+        dept = Department(name="Default", slug="default")
+        db.session.add(dept)
+        db.session.commit()
+    return dept
+
+
+def _redirect_after_login(user):
+    """Redirect user to the appropriate page after login."""
+    if user.is_global_admin:
+        return redirect(url_for("dashboard.global_overview"))
+    if user.department_id:
+        if user.is_dept_admin:
+            return redirect(url_for("dashboard.dept_dashboard", dept_id=user.department_id))
+        return redirect(url_for("purchases.index", dept_id=user.department_id))
+    # User has no department assignment — shouldn't happen but fallback
+    return redirect(url_for("auth.login"))
+
+
 @auth_bp.route("/login")
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("dashboard.index"))
+        return _redirect_after_login(current_user)
 
     # If Azure AD is not configured, use dev login
     if not current_app.config["AZURE_CLIENT_ID"]:
@@ -88,9 +111,12 @@ def callback():
     user = User.query.filter_by(email=email).first()
     if user is None:
         # Determine role
-        role = "staff"
         if email in current_app.config["ADMIN_EMAILS"]:
-            role = "admin"
+            role = "global_admin"
+            department_id = None
+        else:
+            role = "user"
+            department_id = _get_default_department().id
 
         user = User(
             email=email,
@@ -98,6 +124,7 @@ def callback():
             role=role,
             auth_provider="azure_ad",
             azure_oid=oid,
+            department_id=department_id,
         )
         db.session.add(user)
         db.session.commit()
@@ -107,9 +134,10 @@ def callback():
         if user.display_name != display_name:
             user.display_name = display_name
             db.session.commit()
-        # Bootstrap admin if listed in ADMIN_EMAILS and not yet admin
-        if email in current_app.config["ADMIN_EMAILS"] and user.role != "admin":
-            user.role = "admin"
+        # Bootstrap global_admin if listed in ADMIN_EMAILS
+        if email in current_app.config["ADMIN_EMAILS"] and user.role != "global_admin":
+            user.role = "global_admin"
+            user.department_id = None
             db.session.commit()
 
     if not user.is_active:
@@ -120,7 +148,7 @@ def callback():
     session.pop("auth_state", None)
     log_activity(user.id, "user_login", "user", user.id)
     flash(f"Welcome, {user.display_name}!", "success")
-    return redirect(url_for("dashboard.index"))
+    return _redirect_after_login(user)
 
 
 @auth_bp.route("/dev-login", methods=["POST"])
@@ -141,12 +169,19 @@ def dev_login():
 
     user = User.query.filter_by(email=email).first()
     if user is None:
-        role = "admin" if email in current_app.config["ADMIN_EMAILS"] else "staff"
+        if email in current_app.config["ADMIN_EMAILS"]:
+            role = "global_admin"
+            department_id = None
+        else:
+            role = "user"
+            department_id = _get_default_department().id
+
         user = User(
             email=email,
             display_name=display_name,
             role=role,
             auth_provider="dev",
+            department_id=department_id,
         )
         db.session.add(user)
         db.session.commit()
@@ -157,7 +192,7 @@ def dev_login():
 
     login_user(user)
     flash(f"Welcome, {user.display_name}! (Dev mode)", "success")
-    return redirect(url_for("dashboard.index"))
+    return _redirect_after_login(user)
 
 
 @auth_bp.route("/logout")

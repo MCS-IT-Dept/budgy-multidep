@@ -1,6 +1,8 @@
 import os
 import pytest
 from app import create_app, db as _db
+from app.models.department import Department
+from app.models.payment_method import PaymentMethod
 from app.models.user import User
 from app.models.budget_line_item import BudgetLineItem
 from app.models.fiscal_year import FiscalYear
@@ -31,12 +33,21 @@ def client(app, db):
 
 
 @pytest.fixture
+def default_department(db):
+    dept = Department(name="Default", slug="default")
+    db.session.add(dept)
+    db.session.commit()
+    return dept
+
+
+@pytest.fixture
 def admin_user(db):
     user = User(
         email="admin@test.com",
         display_name="Admin User",
-        role="admin",
+        role="global_admin",
         auth_provider="dev",
+        department_id=None,
     )
     db.session.add(user)
     db.session.commit()
@@ -44,12 +55,27 @@ def admin_user(db):
 
 
 @pytest.fixture
-def staff_user(db):
+def dept_admin_user(db, default_department):
+    user = User(
+        email="deptadmin@test.com",
+        display_name="Dept Admin User",
+        role="dept_admin",
+        auth_provider="dev",
+        department_id=default_department.id,
+    )
+    db.session.add(user)
+    db.session.commit()
+    return user
+
+
+@pytest.fixture
+def staff_user(db, default_department):
     user = User(
         email="staff@test.com",
         display_name="Staff User",
-        role="staff",
+        role="user",
         auth_provider="dev",
+        department_id=default_department.id,
     )
     db.session.add(user)
     db.session.commit()
@@ -57,18 +83,38 @@ def staff_user(db):
 
 
 @pytest.fixture
-def sample_line_items(db):
+def sample_line_items(db, default_department):
     items = []
     for code, name in [
         ("72250 336", "Maintenance and Repair"),
         ("72250 471", "Software"),
         ("Other", "Other"),
     ]:
-        item = BudgetLineItem(code=code, name=name, is_custom=(code == "Other"))
+        item = BudgetLineItem(
+            code=code,
+            name=name,
+            is_custom=(code == "Other"),
+            department_id=default_department.id,
+        )
         db.session.add(item)
         items.append(item)
     db.session.commit()
     return items
+
+
+@pytest.fixture
+def sample_payment_methods(db, default_department):
+    methods = []
+    for i, name in enumerate(["Credit Card", "Purchase Order", "Other"]):
+        pm = PaymentMethod(
+            department_id=default_department.id,
+            name=name,
+            sort_order=i,
+        )
+        db.session.add(pm)
+        methods.append(pm)
+    db.session.commit()
+    return methods
 
 
 @pytest.fixture

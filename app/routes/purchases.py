@@ -12,6 +12,7 @@ from flask import (
     request,
     abort,
     Response,
+    g,
 )
 from flask_login import login_required, current_user
 
@@ -22,31 +23,44 @@ from app.models.budget_line_item import BudgetLineItem
 from app.models.fiscal_year import FiscalYear
 from app.models.user import User
 from app.services.fiscal_year import get_or_create_fiscal_year
+from app.services.department import get_payment_methods_for_department
 from app.services.storage import get_storage_backend, generate_object_key, allowed_file
 from app.services.activity import log_activity
 from app.utils.forms import PurchaseForm, PurchaseStatusForm
-from app.utils.decorators import manager_required
+from app.utils.decorators import dept_admin_required, department_access_required
 
 purchases_bp = Blueprint(
     "purchases", __name__, template_folder="../templates/purchases"
 )
 
 
-def _populate_form_choices(form):
-    items = BudgetLineItem.query.filter_by(is_active=True).order_by(BudgetLineItem.code).all()
+def _populate_form_choices(form, department_id):
+    items = (
+        BudgetLineItem.query
+        .filter_by(is_active=True, department_id=department_id)
+        .order_by(BudgetLineItem.code)
+        .all()
+    )
     form.budget_line_item_id.choices = [(i.id, i.display_label) for i in items]
 
+    payment_methods = get_payment_methods_for_department(department_id)
+    form.payment_method.choices = [("", "— Select —")] + [
+        (pm.name, pm.name) for pm in payment_methods
+    ]
 
-@purchases_bp.route("/")
+
+@purchases_bp.route("/dept/<int:dept_id>/")
 @login_required
-def index():
+@department_access_required
+def index(dept_id):
+    department = g.department
     page = request.args.get("page", 1, type=int)
     per_page = 25
 
-    query = Purchase.query
+    query = Purchase.query.filter_by(department_id=department.id)
 
-    # Staff can only see their own purchases
-    if current_user.role == "staff":
+    # Regular users can only see their own purchases
+    if current_user.role == "user":
         query = query.filter_by(submitted_by_user_id=current_user.id)
 
     # Filters
@@ -103,8 +117,17 @@ def index():
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
     fiscal_years = FiscalYear.query.order_by(FiscalYear.start_date.desc()).all()
-    line_items = BudgetLineItem.query.filter_by(is_active=True).order_by(BudgetLineItem.code).all()
-    users = User.query.filter_by(is_active=True).order_by(User.display_name).all() if current_user.is_manager else []
+    line_items = (
+        BudgetLineItem.query
+        .filter_by(is_active=True, department_id=department.id)
+        .order_by(BudgetLineItem.code)
+        .all()
+    )
+    users = (
+        User.query.filter_by(is_active=True, department_id=department.id)
+        .order_by(User.display_name).all()
+        if current_user.is_manager else []
+    )
 
     return render_template(
         "purchases/index.html",
@@ -114,27 +137,31 @@ def index():
         line_items=line_items,
         users=users,
         statuses=Purchase.STATUSES,
+        department=department,
     )
 
 
-@purchases_bp.route("/new", methods=["GET", "POST"])
+@purchases_bp.route("/dept/<int:dept_id>/new", methods=["GET", "POST"])
 @login_required
-def create():
+@department_access_required
+def create(dept_id):
+    department = g.department
     form = PurchaseForm()
-    _populate_form_choices(form)
+    _populate_form_choices(form, department.id)
 
     if form.validate_on_submit():
-        # Get the "Other" line item
-        other_item = BudgetLineItem.query.filter_by(code="Other").first()
+        other_item = BudgetLineItem.query.filter_by(
+            code="Other", department_id=department.id
+        ).first()
         is_other = other_item and form.budget_line_item_id.data == other_item.id
 
         if is_other and not form.custom_account_code.data:
             flash("Custom account code is required when 'Other' is selected.", "danger")
-            return render_template("purchases/form.html", form=form, edit=False)
+            return render_template("purchases/form.html", form=form, edit=False, department=department)
 
         if is_other and not form.custom_account_description.data:
             flash("Custom account description is required when 'Other' is selected.", "danger")
-            return render_template("purchases/form.html", form=form, edit=False)
+            return render_template("purchases/form.html", form=form, edit=False, department=department)
 
         fiscal_year = get_or_create_fiscal_year(form.purchase_date.data)
 
@@ -152,6 +179,7 @@ def create():
             custom_account_description=form.custom_account_description.data if is_other else None,
             fiscal_year_id=fiscal_year.id,
             submitted_by_user_id=current_user.id,
+            department_id=department.id,
             status="submitted",
         )
         db.session.add(purchase)
@@ -184,21 +212,27 @@ def create():
         db.session.commit()
         log_activity(
             current_user.id, "purchase_created", "purchase", purchase.id,
-            f"Vendor: {purchase.vendor_name}, Amount: {purchase.amount}"
+            f"Vendor: {purchase.vendor_name}, Amount: {purchase.amount}",
+            department_id=department.id,
         )
         flash("Purchase created successfully.", "success")
-        return redirect(url_for("purchases.detail", id=purchase.id))
+        return redirect(url_for("purchases.detail", dept_id=department.id, id=purchase.id))
 
-    return render_template("purchases/form.html", form=form, edit=False)
+    return render_template("purchases/form.html", form=form, edit=False, department=department)
 
 
-@purchases_bp.route("/<int:id>")
+@purchases_bp.route("/dept/<int:dept_id>/<int:id>")
 @login_required
-def detail(id):
+@department_access_required
+def detail(dept_id, id):
+    department = g.department
     purchase = Purchase.query.get_or_404(id)
 
-    # Staff can only view their own
-    if current_user.role == "staff" and purchase.submitted_by_user_id != current_user.id:
+    if purchase.department_id != department.id:
+        abort(404)
+
+    # Regular users can only view their own
+    if current_user.role == "user" and purchase.submitted_by_user_id != current_user.id:
         abort(403)
 
     status_form = PurchaseStatusForm(obj=purchase)
@@ -209,35 +243,43 @@ def detail(id):
         purchase=purchase,
         documents=documents,
         status_form=status_form,
+        department=department,
     )
 
 
-@purchases_bp.route("/<int:id>/edit", methods=["GET", "POST"])
+@purchases_bp.route("/dept/<int:dept_id>/<int:id>/edit", methods=["GET", "POST"])
 @login_required
-def edit(id):
+@department_access_required
+def edit(dept_id, id):
+    department = g.department
     purchase = Purchase.query.get_or_404(id)
 
+    if purchase.department_id != department.id:
+        abort(404)
+
     # Only owner (if submitted) or admin can edit
-    if current_user.role == "staff" and purchase.submitted_by_user_id != current_user.id:
+    if current_user.role == "user" and purchase.submitted_by_user_id != current_user.id:
         abort(403)
-    if current_user.role == "staff" and purchase.status not in ("submitted",):
+    if current_user.role == "user" and purchase.status not in ("submitted",):
         flash("You can only edit purchases in 'submitted' status.", "warning")
-        return redirect(url_for("purchases.detail", id=id))
+        return redirect(url_for("purchases.detail", dept_id=department.id, id=id))
 
     form = PurchaseForm(obj=purchase)
-    _populate_form_choices(form)
+    _populate_form_choices(form, department.id)
 
     if form.validate_on_submit():
-        other_item = BudgetLineItem.query.filter_by(code="Other").first()
+        other_item = BudgetLineItem.query.filter_by(
+            code="Other", department_id=department.id
+        ).first()
         is_other = other_item and form.budget_line_item_id.data == other_item.id
 
         if is_other and not form.custom_account_code.data:
             flash("Custom account code is required when 'Other' is selected.", "danger")
-            return render_template("purchases/form.html", form=form, edit=True, purchase=purchase)
+            return render_template("purchases/form.html", form=form, edit=True, purchase=purchase, department=department)
 
         if is_other and not form.custom_account_description.data:
             flash("Custom account description is required when 'Other' is selected.", "danger")
-            return render_template("purchases/form.html", form=form, edit=True, purchase=purchase)
+            return render_template("purchases/form.html", form=form, edit=True, purchase=purchase, department=department)
 
         fiscal_year = get_or_create_fiscal_year(form.purchase_date.data)
 
@@ -277,18 +319,27 @@ def edit(id):
                 db.session.add(doc)
 
         db.session.commit()
-        log_activity(current_user.id, "purchase_updated", "purchase", purchase.id)
+        log_activity(
+            current_user.id, "purchase_updated", "purchase", purchase.id,
+            department_id=department.id,
+        )
         flash("Purchase updated.", "success")
-        return redirect(url_for("purchases.detail", id=purchase.id))
+        return redirect(url_for("purchases.detail", dept_id=department.id, id=purchase.id))
 
-    return render_template("purchases/form.html", form=form, edit=True, purchase=purchase)
+    return render_template("purchases/form.html", form=form, edit=True, purchase=purchase, department=department)
 
 
-@purchases_bp.route("/<int:id>/status", methods=["POST"])
+@purchases_bp.route("/dept/<int:dept_id>/<int:id>/status", methods=["POST"])
 @login_required
-@manager_required
-def update_status(id):
+@department_access_required
+@dept_admin_required
+def update_status(dept_id, id):
+    department = g.department
     purchase = Purchase.query.get_or_404(id)
+
+    if purchase.department_id != department.id:
+        abort(404)
+
     form = PurchaseStatusForm()
 
     if form.validate_on_submit():
@@ -298,20 +349,23 @@ def update_status(id):
         db.session.commit()
         log_activity(
             current_user.id, "purchase_status_changed", "purchase", purchase.id,
-            f"{old_status} -> {purchase.status}"
+            f"{old_status} -> {purchase.status}",
+            department_id=department.id,
         )
         flash(f"Status updated to {purchase.status}.", "success")
     else:
         flash("Invalid status update.", "danger")
 
-    return redirect(url_for("purchases.detail", id=id))
+    return redirect(url_for("purchases.detail", dept_id=department.id, id=id))
 
 
-@purchases_bp.route("/export")
+@purchases_bp.route("/dept/<int:dept_id>/export")
 @login_required
-@manager_required
-def export_csv():
-    query = Purchase.query
+@department_access_required
+@dept_admin_required
+def export_csv(dept_id):
+    department = g.department
+    query = Purchase.query.filter_by(department_id=department.id)
 
     fy_id = request.args.get("fy", type=int)
     if fy_id:
@@ -349,20 +403,25 @@ def export_csv():
     return Response(
         output.getvalue(),
         mimetype="text/csv",
-        headers={"Content-Disposition": "attachment; filename=purchases_export.csv"},
+        headers={"Content-Disposition": f"attachment; filename={department.slug}_purchases_export.csv"},
     )
 
 
-@purchases_bp.route("/vendors.json")
+@purchases_bp.route("/dept/<int:dept_id>/vendors.json")
 @login_required
-def vendor_autocomplete():
+@department_access_required
+def vendor_autocomplete(dept_id):
+    department = g.department
     q = request.args.get("q", "").strip()
     if len(q) < 2:
         return {"results": []}
 
     vendors = (
         db.session.query(Purchase.vendor_name)
-        .filter(Purchase.vendor_name.ilike(f"%{q}%"))
+        .filter(
+            Purchase.vendor_name.ilike(f"%{q}%"),
+            Purchase.department_id == department.id,
+        )
         .distinct()
         .order_by(Purchase.vendor_name)
         .limit(10)

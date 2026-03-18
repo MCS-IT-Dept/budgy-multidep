@@ -1,9 +1,11 @@
 {% extends "layouts/base.html" %}
-{% block title %}Admin - Purchases{% endblock %}
+{% block title %}Purchases (Admin) - {{ department.name }}{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="bi bi-receipt"></i> All Purchases (Admin)</h2>
-    <a href="{{ url_for('admin.index') }}" class="btn btn-outline-secondary btn-sm">Back</a>
+    <h2><i class="bi bi-receipt"></i> Purchases — {{ department.name }}</h2>
+    {% if current_user.is_global_admin %}
+    <a href="{{ url_for('admin.departments') }}" class="btn btn-outline-secondary btn-sm">Back</a>
+    {% endif %}
 </div>
 <div class="table-responsive">
     <table class="table table-hover table-sm">
@@ -14,14 +16,14 @@
             {% for p in purchases %}
             <tr>
                 <td>{{ p.id }}</td>
-                <td><a href="{{ url_for('purchases.detail', id=p.id) }}">{{ p.vendor_name }}</a></td>
+                <td><a href="{{ url_for('purchases.detail', dept_id=department.id, id=p.id) }}">{{ p.vendor_name }}</a></td>
                 <td>{{ p.purchase_date.strftime('%m/%d/%Y') }}</td>
                 <td class="text-end">${{ "{:,.2f}".format(p.amount) }}</td>
                 <td><span class="badge bg-{% if p.status == 'approved' %}success{% elif p.status == 'rejected' %}danger{% elif p.status == 'reviewed' %}info{% else %}warning{% endif %}">{{ p.status }}</span></td>
                 <td>{{ p.line_item.code if p.line_item else '' }}</td>
                 <td>{{ p.submitter.display_name if p.submitter else '' }}</td>
                 <td>
-                    <form method="POST" action="{{ url_for('admin.purchase_delete', id=p.id) }}" onsubmit="return confirm('Delete this purchase?');" class="d-inline">
+                    <form method="POST" action="{{ url_for('admin.purchase_delete', dept_id=department.id, id=p.id) }}" onsubmit="return confirm('Delete this purchase?');" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                     </form>

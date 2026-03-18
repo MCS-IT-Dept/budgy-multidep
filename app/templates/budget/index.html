@@ -1,8 +1,8 @@
 {% extends "layouts/base.html" %}
-{% block title %}Budget Overview{% endblock %}
+{% block title %}Budget - {{ department.name }}{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="bi bi-piggy-bank"></i> Budget Overview</h2>
+    <h2><i class="bi bi-piggy-bank"></i> Budget Overview — {{ department.name }}</h2>
     <div class="d-flex gap-2 align-items-center">
         <form method="GET" class="d-flex gap-2">
             <select name="fy" class="form-select form-select-sm" onchange="this.form.submit()">
@@ -11,7 +11,7 @@
                 {% endfor %}
             </select>
         </form>
-        <a href="{{ url_for('budget.export_csv', fy=fiscal_year.id) }}" class="btn btn-sm btn-outline-secondary">
+        <a href="{{ url_for('budget.export_csv', dept_id=department.id, fy=fiscal_year.id) }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-download"></i> Export CSV
         </a>
     </div>

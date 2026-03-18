@@ -1,9 +1,18 @@
 {% extends "layouts/base.html" %}
 {% block title %}Admin{% endblock %}
 {% block content %}
-<h2><i class="bi bi-gear"></i> Administration</h2>
+<h2><i class="bi bi-gear"></i> Global Administration</h2>
 
 <div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h3>{{ dept_count }}</h3>
+                <p class="text-muted mb-0">Departments</p>
+                <a href="{{ url_for('admin.departments') }}" class="btn btn-sm btn-outline-primary mt-2">Manage</a>
+            </div>
+        </div>
+    </div>
     <div class="col-md-3">
         <div class="card text-center">
             <div class="card-body">
@@ -18,7 +27,6 @@
             <div class="card-body">
                 <h3>{{ purchase_count }}</h3>
                 <p class="text-muted mb-0">Purchases</p>
-                <a href="{{ url_for('admin.purchases') }}" class="btn btn-sm btn-outline-primary mt-2">Manage</a>
             </div>
         </div>
     </div>
@@ -28,19 +36,6 @@
                 <h3>{{ fy_count }}</h3>
                 <p class="text-muted mb-0">Fiscal Years</p>
                 <a href="{{ url_for('admin.fiscal_years') }}" class="btn btn-sm btn-outline-primary mt-2">Manage</a>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-center">
-            <div class="card-body">
-                <h3>&mdash;</h3>
-                <p class="text-muted mb-0">Quick Links</p>
-                <div class="mt-2 d-flex flex-column gap-1">
-                    <a href="{{ url_for('admin.line_items') }}" class="btn btn-sm btn-outline-secondary">Line Items</a>
-                    <a href="{{ url_for('admin.allocations') }}" class="btn btn-sm btn-outline-secondary">Allocations</a>
-                    <a href="{{ url_for('admin.documents') }}" class="btn btn-sm btn-outline-secondary">Documents</a>
-                </div>
             </div>
         </div>
     </div>

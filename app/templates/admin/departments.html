@@ -1,0 +1,36 @@
+{% extends "layouts/base.html" %}
+{% block title %}Departments{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-building"></i> Departments</h2>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('admin.department_create') }}" class="btn btn-primary btn-sm">New Department</a>
+        <a href="{{ url_for('admin.index') }}" class="btn btn-outline-secondary btn-sm">Back</a>
+    </div>
+</div>
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr><th>Name</th><th>Slug</th><th>Active</th><th>Created</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for d in departments %}
+            <tr>
+                <td><strong>{{ d.name }}</strong></td>
+                <td><code>{{ d.slug }}</code></td>
+                <td>{% if d.is_active %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-muted"></i>{% endif %}</td>
+                <td>{{ d.created_at.strftime('%m/%d/%Y') if d.created_at else '' }}</td>
+                <td>
+                    <div class="btn-group btn-group-sm">
+                        <a href="{{ url_for('admin.department_edit', id=d.id) }}" class="btn btn-outline-primary">Edit</a>
+                        <a href="{{ url_for('admin.line_items', dept_id=d.id) }}" class="btn btn-outline-secondary">Line Items</a>
+                        <a href="{{ url_for('admin.payment_methods', dept_id=d.id) }}" class="btn btn-outline-secondary">Payment Methods</a>
+                        <a href="{{ url_for('admin.allocations', dept_id=d.id) }}" class="btn btn-outline-secondary">Allocations</a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

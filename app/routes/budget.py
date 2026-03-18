@@ -2,21 +2,23 @@ import io
 import csv
 from datetime import date
 
-from flask import Blueprint, render_template, request, Response
+from flask import Blueprint, render_template, request, Response, g
 from flask_login import login_required
 
 from app.models.fiscal_year import FiscalYear
 from app.services.budget import get_budget_summary, get_budget_totals
 from app.services.fiscal_year import get_or_create_fiscal_year, get_all_fiscal_years
-from app.utils.decorators import manager_required
+from app.utils.decorators import dept_admin_required, department_access_required
 
 budget_bp = Blueprint("budget", __name__, template_folder="../templates/budget")
 
 
-@budget_bp.route("/")
+@budget_bp.route("/dept/<int:dept_id>/")
 @login_required
-@manager_required
-def index():
+@department_access_required
+@dept_admin_required
+def index(dept_id):
+    department = g.department
     fiscal_years = get_all_fiscal_years()
     fy_id = request.args.get("fy", type=int)
 
@@ -28,7 +30,7 @@ def index():
     if not fiscal_year:
         fiscal_year = get_or_create_fiscal_year(date.today())
 
-    summary = get_budget_summary(fiscal_year.id)
+    summary = get_budget_summary(fiscal_year.id, department_id=department.id)
     totals = get_budget_totals(summary)
 
     return render_template(
@@ -37,20 +39,23 @@ def index():
         fiscal_years=fiscal_years,
         summary=summary,
         totals=totals,
+        department=department,
     )
 
 
-@budget_bp.route("/export")
+@budget_bp.route("/dept/<int:dept_id>/export")
 @login_required
-@manager_required
-def export_csv():
+@department_access_required
+@dept_admin_required
+def export_csv(dept_id):
+    department = g.department
     fy_id = request.args.get("fy", type=int)
     if fy_id:
         fiscal_year = FiscalYear.query.get_or_404(fy_id)
     else:
         fiscal_year = get_or_create_fiscal_year(date.today())
 
-    summary = get_budget_summary(fiscal_year.id)
+    summary = get_budget_summary(fiscal_year.id, department_id=department.id)
     totals = get_budget_totals(summary)
 
     output = io.StringIO()
@@ -88,6 +93,6 @@ def export_csv():
         output.getvalue(),
         mimetype="text/csv",
         headers={
-            "Content-Disposition": f"attachment; filename=budget_{fiscal_year.label}.csv"
+            "Content-Disposition": f"attachment; filename=budget_{department.slug}_{fiscal_year.label}.csv"
         },
     )

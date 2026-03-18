@@ -1,8 +1,8 @@
 {% extends "layouts/base.html" %}
-{% block title %}Dashboard{% endblock %}
+{% block title %}Dashboard - {{ department.name }}{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="bi bi-speedometer2"></i> Budget Dashboard</h2>
+    <h2><i class="bi bi-speedometer2"></i> {{ department.name }} Dashboard</h2>
     <div class="d-flex gap-2 align-items-center">
         <form method="GET" class="d-flex gap-2">
             <select name="fy" class="form-select form-select-sm" onchange="this.form.submit()">
@@ -11,7 +11,7 @@
                 {% endfor %}
             </select>
         </form>
-        <a href="{{ url_for('budget.export_csv', fy=fiscal_year.id) }}" class="btn btn-sm btn-outline-secondary">
+        <a href="{{ url_for('budget.export_csv', dept_id=department.id, fy=fiscal_year.id) }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-download"></i> Export CSV
         </a>
     </div>
@@ -117,8 +117,8 @@
                 <tr>
                     <td colspan="8" class="text-center text-muted py-4">
                         No budget allocations for this fiscal year.
-                        {% if current_user.is_admin %}
-                        <a href="{{ url_for('admin.allocation_create') }}">Create allocations</a>
+                        {% if current_user.is_manager %}
+                        <a href="{{ url_for('admin.allocation_create', dept_id=department.id) }}">Create allocations</a>
                         {% endif %}
                     </td>
                 </tr>
@@ -132,7 +132,7 @@
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Recent Purchases</h5>
-        <a href="{{ url_for('purchases.index', fy=fiscal_year.id) }}" class="btn btn-sm btn-outline-primary">View All</a>
+        <a href="{{ url_for('purchases.index', dept_id=department.id, fy=fiscal_year.id) }}" class="btn btn-sm btn-outline-primary">View All</a>
     </div>
     <div class="table-responsive">
         <table class="table table-hover mb-0">
@@ -150,7 +150,7 @@
                 {% for p in recent_purchases %}
                 <tr>
                     <td>{{ p.purchase_date.strftime('%m/%d/%Y') }}</td>
-                    <td><a href="{{ url_for('purchases.detail', id=p.id) }}">{{ p.vendor_name }}</a></td>
+                    <td><a href="{{ url_for('purchases.detail', dept_id=department.id, id=p.id) }}">{{ p.vendor_name }}</a></td>
                     <td>{{ p.line_item.code if p.line_item else 'N/A' }}</td>
                     <td class="text-end">${{ "{:,.2f}".format(p.amount) }}</td>
                     <td>

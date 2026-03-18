@@ -10,11 +10,14 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     display_name = db.Column(db.String(255), nullable=False)
     role = db.Column(
-        db.String(20), nullable=False, default="staff"
-    )  # admin, manager, staff
+        db.String(20), nullable=False, default="user"
+    )  # global_admin, dept_admin, user
     auth_provider = db.Column(db.String(50), default="azure_ad")
     azure_oid = db.Column(db.String(255), unique=True, nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    department_id = db.Column(
+        db.Integer, db.ForeignKey("departments.id"), nullable=True, index=True
+    )
     created_at = db.Column(
         db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
@@ -28,12 +31,20 @@ class User(UserMixin, db.Model):
     documents = db.relationship("Document", backref="uploader", lazy="dynamic")
 
     @property
+    def is_global_admin(self):
+        return self.role == "global_admin"
+
+    @property
+    def is_dept_admin(self):
+        return self.role == "dept_admin"
+
+    @property
     def is_admin(self):
-        return self.role == "admin"
+        return self.role == "global_admin"
 
     @property
     def is_manager(self):
-        return self.role in ("admin", "manager")
+        return self.role in ("global_admin", "dept_admin")
 
     def __repr__(self):
         return f"<User {self.email}>"

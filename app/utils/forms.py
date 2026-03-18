@@ -6,6 +6,7 @@ from wtforms import (
     DecimalField,
     DateField,
     SelectField,
+    IntegerField,
     HiddenField,
 )
 from wtforms.validators import DataRequired, Optional, NumberRange, Length, ValidationError
@@ -40,7 +41,7 @@ class PurchaseForm(FlaskForm):
     )
     payment_method = SelectField(
         "Payment Method",
-        choices=[("", "— Select —")] + [(m, m) for m in Purchase.PAYMENT_METHODS],
+        choices=[("", "— Select —")],
         validators=[Optional()],
     )
     attachments = MultipleFileField(
@@ -91,11 +92,26 @@ class UserEditForm(FlaskForm):
     )
     role = SelectField(
         "Role",
-        choices=[("staff", "Staff"), ("manager", "Manager"), ("admin", "Admin")],
+        choices=[("user", "User"), ("dept_admin", "Dept Admin"), ("global_admin", "Global Admin")],
         validators=[DataRequired()],
+    )
+    department_id = SelectField(
+        "Department",
+        coerce=int,
+        validators=[Optional()],
     )
     is_active = SelectField(
         "Active",
         choices=[("1", "Yes"), ("0", "No")],
         validators=[DataRequired()],
     )
+
+
+class DepartmentForm(FlaskForm):
+    name = StringField("Name", validators=[DataRequired(), Length(max=255)])
+    slug = StringField("Slug (URL-friendly)", validators=[DataRequired(), Length(max=100)])
+
+
+class PaymentMethodForm(FlaskForm):
+    name = StringField("Name", validators=[DataRequired(), Length(max=100)])
+    sort_order = IntegerField("Sort Order", validators=[Optional()], default=0)

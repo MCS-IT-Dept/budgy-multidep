@@ -1,0 +1,33 @@
+{% extends "layouts/base.html" %}
+{% block title %}Payment Methods - {{ department.name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-credit-card"></i> Payment Methods — {{ department.name }}</h2>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('admin.payment_method_create', dept_id=department.id) }}" class="btn btn-primary btn-sm">New Payment Method</a>
+        {% if current_user.is_global_admin %}
+        <a href="{{ url_for('admin.departments') }}" class="btn btn-outline-secondary btn-sm">Back</a>
+        {% endif %}
+    </div>
+</div>
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr><th>Name</th><th>Sort Order</th><th>Active</th><th></th></tr>
+        </thead>
+        <tbody>
+            {% for m in methods %}
+            <tr>
+                <td><strong>{{ m.name }}</strong></td>
+                <td>{{ m.sort_order }}</td>
+                <td>{% if m.is_active %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-muted"></i>{% endif %}</td>
+                <td><a href="{{ url_for('admin.payment_method_edit', dept_id=department.id, id=m.id) }}" class="btn btn-sm btn-outline-primary">Edit</a></td>
+            </tr>
+            {% endfor %}
+            {% if not methods %}
+            <tr><td colspan="4" class="text-center text-muted py-4">No payment methods configured.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

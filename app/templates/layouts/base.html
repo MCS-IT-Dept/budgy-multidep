@@ -27,34 +27,64 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 {% if current_user.is_authenticated %}
                 <ul class="navbar-nav me-auto">
-                    {% if current_user.is_manager %}
+                    {% if current_user.is_global_admin %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('dashboard.index') }}">
+                        <a class="nav-link" href="{{ url_for('dashboard.global_overview') }}">
+                            <i class="bi bi-speedometer2"></i> Global Dashboard
+                        </a>
+                    </li>
+                    {% elif current_user.is_dept_admin and current_user.department_id %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard.dept_dashboard', dept_id=current_user.department_id) }}">
                             <i class="bi bi-speedometer2"></i> Dashboard
                         </a>
                     </li>
                     {% endif %}
+                    {% if current_user.department_id %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('purchases.index') }}">
+                        <a class="nav-link" href="{{ url_for('purchases.index', dept_id=current_user.department_id) }}">
                             <i class="bi bi-receipt"></i> Purchases
                         </a>
                     </li>
-                    {% if current_user.is_manager %}
+                    {% endif %}
+                    {% if current_user.is_dept_admin and current_user.department_id %}
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('budget.index') }}">
+                        <a class="nav-link" href="{{ url_for('budget.index', dept_id=current_user.department_id) }}">
                             <i class="bi bi-piggy-bank"></i> Budget
                         </a>
                     </li>
                     {% endif %}
-                    {% if current_user.is_admin %}
+                    {% if current_user.is_global_admin %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('admin.index') }}">
                             <i class="bi bi-gear"></i> Admin
                         </a>
                     </li>
+                    {% elif current_user.is_dept_admin and current_user.department_id %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-gear"></i> Dept Admin
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('admin.line_items', dept_id=current_user.department_id) }}">Line Items</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin.payment_methods', dept_id=current_user.department_id) }}">Payment Methods</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin.allocations', dept_id=current_user.department_id) }}">Allocations</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin.purchases', dept_id=current_user.department_id) }}">Manage Purchases</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin.documents', dept_id=current_user.department_id) }}">Manage Documents</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin.dept_activity', dept_id=current_user.department_id) }}">Activity Log</a></li>
+                        </ul>
+                    </li>
                     {% endif %}
                 </ul>
                 <ul class="navbar-nav">
+                    {% if current_user.department %}
+                    <li class="nav-item">
+                        <span class="nav-link text-light opacity-75">
+                            <i class="bi bi-building"></i> {{ current_user.department.name }}
+                        </span>
+                    </li>
+                    {% endif %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-person-circle"></i> {{ current_user.display_name }}
@@ -86,7 +116,7 @@
     </main>
 
     <footer class="bg-light text-center py-2 mt-4 border-top">
-        <small class="text-muted">Budgy &mdash; Technology Department Budget Tracker | FY {{ current_fiscal_year_label }}</small>
+        <small class="text-muted">Budgy &mdash; Budget Tracker | FY {{ current_fiscal_year_label }}</small>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

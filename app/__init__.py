@@ -60,7 +60,7 @@ def create_app(config_name=None):
 
     app.register_blueprint(main_bp)
     app.register_blueprint(dashboard_bp, url_prefix="/dashboard")
-    app.register_blueprint(purchases_bp, url_prefix="/purchases")
+    app.register_blueprint(purchases_bp)
     app.register_blueprint(budget_bp, url_prefix="/budget")
     app.register_blueprint(documents_bp, url_prefix="/documents")
     app.register_blueprint(auth_bp, url_prefix="/auth")
@@ -73,12 +73,17 @@ def create_app(config_name=None):
 
     # Template context
     from app.services.fiscal_year import get_current_fiscal_year_label
+    from flask_login import current_user
 
     @app.context_processor
     def inject_globals():
-        return {
+        ctx = {
             "current_fiscal_year_label": get_current_fiscal_year_label(),
         }
+        if current_user.is_authenticated and current_user.is_global_admin:
+            from app.services.department import get_active_departments
+            ctx["all_departments"] = get_active_departments()
+        return ctx
 
     # Error handlers
     from app.routes.errors import register_error_handlers

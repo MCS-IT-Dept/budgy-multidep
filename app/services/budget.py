@@ -7,24 +7,24 @@ from app.models.purchase import Purchase
 from app.models.fiscal_year import FiscalYear
 
 
-def get_budget_summary(fiscal_year_id: int) -> list[dict]:
-    """Get budget summary for a fiscal year.
+def get_budget_summary(fiscal_year_id: int, department_id: int = None) -> list[dict]:
+    """Get budget summary for a fiscal year, optionally filtered by department.
 
     Returns a list of dicts with line item info, allocated amount,
     approved spend, pending spend, remaining, and percentage used.
     """
-    allocations = (
-        db.session.query(
-            BudgetAllocation, BudgetLineItem
-        )
+    alloc_query = (
+        db.session.query(BudgetAllocation, BudgetLineItem)
         .join(BudgetLineItem, BudgetAllocation.budget_line_item_id == BudgetLineItem.id)
         .filter(BudgetAllocation.fiscal_year_id == fiscal_year_id)
-        .order_by(BudgetLineItem.code)
-        .all()
     )
+    if department_id is not None:
+        alloc_query = alloc_query.filter(BudgetLineItem.department_id == department_id)
+
+    allocations = alloc_query.order_by(BudgetLineItem.code).all()
 
     # Get approved spend per line item
-    approved_spend = dict(
+    approved_query = (
         db.session.query(
             Purchase.budget_line_item_id,
             func.coalesce(func.sum(Purchase.amount), Decimal("0")),
@@ -33,12 +33,13 @@ def get_budget_summary(fiscal_year_id: int) -> list[dict]:
             Purchase.fiscal_year_id == fiscal_year_id,
             Purchase.status == "approved",
         )
-        .group_by(Purchase.budget_line_item_id)
-        .all()
     )
+    if department_id is not None:
+        approved_query = approved_query.filter(Purchase.department_id == department_id)
+    approved_spend = dict(approved_query.group_by(Purchase.budget_line_item_id).all())
 
     # Get pending (submitted + reviewed) spend per line item
-    pending_spend = dict(
+    pending_query = (
         db.session.query(
             Purchase.budget_line_item_id,
             func.coalesce(func.sum(Purchase.amount), Decimal("0")),
@@ -47,12 +48,13 @@ def get_budget_summary(fiscal_year_id: int) -> list[dict]:
             Purchase.fiscal_year_id == fiscal_year_id,
             Purchase.status.in_(["submitted", "reviewed"]),
         )
-        .group_by(Purchase.budget_line_item_id)
-        .all()
     )
+    if department_id is not None:
+        pending_query = pending_query.filter(Purchase.department_id == department_id)
+    pending_spend = dict(pending_query.group_by(Purchase.budget_line_item_id).all())
 
     # Purchase count per line item
-    purchase_counts = dict(
+    count_query = (
         db.session.query(
             Purchase.budget_line_item_id,
             func.count(Purchase.id),
@@ -61,9 +63,10 @@ def get_budget_summary(fiscal_year_id: int) -> list[dict]:
             Purchase.fiscal_year_id == fiscal_year_id,
             Purchase.status != "rejected",
         )
-        .group_by(Purchase.budget_line_item_id)
-        .all()
     )
+    if department_id is not None:
+        count_query = count_query.filter(Purchase.department_id == department_id)
+    purchase_counts = dict(count_query.group_by(Purchase.budget_line_item_id).all())
 
     results = []
     for alloc, item in allocations:
@@ -108,3 +111,19 @@ def get_budget_totals(summary: list[dict]) -> dict:
         "total_remaining": total_remaining,
         "pct_used": pct_used,
     }
+
+
+def get_cross_department_summary(fiscal_year_id: int) -> list[dict]:
+    """Get a per-department budget roll-up for the global admin overview."""
+    from app.models.department import Department
+
+    departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+    results = []
+    for dept in departments:
+        summary = get_budget_summary(fiscal_year_id, department_id=dept.id)
+        totals = get_budget_totals(summary)
+        results.append({
+            "department": dept,
+            "totals": totals,
+        })
+    return results

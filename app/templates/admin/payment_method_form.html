@@ -1,26 +1,26 @@
 {% extends "layouts/base.html" %}
-{% block title %}{% if edit %}Edit{% else %}New{% endif %} Line Item{% endblock %}
+{% block title %}{% if edit %}Edit{% else %}New{% endif %} Payment Method{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-6">
-        <h2>{% if edit %}Edit{% else %}New{% endif %} Budget Line Item — {{ department.name }}</h2>
+        <h2>{% if edit %}Edit{% else %}New{% endif %} Payment Method — {{ department.name }}</h2>
         <div class="card">
             <div class="card-body">
                 <form method="POST">
                     {{ form.hidden_tag() }}
                     <div class="mb-3">
-                        <label class="form-label">{{ form.code.label.text }}</label>
-                        {{ form.code(class="form-control") }}
-                        {% for e in form.code.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
-                    </div>
-                    <div class="mb-3">
                         <label class="form-label">{{ form.name.label.text }}</label>
                         {{ form.name(class="form-control") }}
                         {% for e in form.name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.sort_order.label.text }}</label>
+                        {{ form.sort_order(class="form-control", type="number") }}
+                        <div class="form-text">Lower numbers appear first.</div>
+                    </div>
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">Save</button>
-                        <a href="{{ url_for('admin.line_items', dept_id=department.id) }}" class="btn btn-outline-secondary">Cancel</a>
+                        <a href="{{ url_for('admin.payment_methods', dept_id=department.id) }}" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>
             </div>

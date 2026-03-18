@@ -1,11 +1,13 @@
 {% extends "layouts/base.html" %}
-{% block title %}Budget Line Items{% endblock %}
+{% block title %}Budget Line Items - {{ department.name }}{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2><i class="bi bi-list-check"></i> Budget Line Items</h2>
+    <h2><i class="bi bi-list-check"></i> Budget Line Items — {{ department.name }}</h2>
     <div class="d-flex gap-2">
-        <a href="{{ url_for('admin.line_item_create') }}" class="btn btn-primary btn-sm">New Line Item</a>
-        <a href="{{ url_for('admin.index') }}" class="btn btn-outline-secondary btn-sm">Back</a>
+        <a href="{{ url_for('admin.line_item_create', dept_id=department.id) }}" class="btn btn-primary btn-sm">New Line Item</a>
+        {% if current_user.is_global_admin %}
+        <a href="{{ url_for('admin.departments') }}" class="btn btn-outline-secondary btn-sm">Back</a>
+        {% endif %}
     </div>
 </div>
 <div class="table-responsive">
@@ -20,7 +22,7 @@
                 <td>{{ item.name }}</td>
                 <td>{% if item.is_custom %}<i class="bi bi-check text-success"></i>{% endif %}</td>
                 <td>{% if item.is_active %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-muted"></i>{% endif %}</td>
-                <td><a href="{{ url_for('admin.line_item_edit', id=item.id) }}" class="btn btn-sm btn-outline-primary">Edit</a></td>
+                <td><a href="{{ url_for('admin.line_item_edit', dept_id=department.id, id=item.id) }}" class="btn btn-sm btn-outline-primary">Edit</a></td>
             </tr>
             {% endfor %}
         </tbody>

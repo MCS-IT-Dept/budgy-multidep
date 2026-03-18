@@ -8,14 +8,15 @@
 <div class="table-responsive">
     <table class="table table-hover">
         <thead class="table-light">
-            <tr><th>Name</th><th>Email</th><th>Role</th><th>Provider</th><th>Active</th><th>Created</th><th></th></tr>
+            <tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Provider</th><th>Active</th><th>Created</th><th></th></tr>
         </thead>
         <tbody>
             {% for u in users %}
             <tr>
                 <td>{{ u.display_name }}</td>
                 <td>{{ u.email }}</td>
-                <td><span class="badge bg-{% if u.role == 'admin' %}danger{% elif u.role == 'manager' %}primary{% else %}secondary{% endif %}">{{ u.role }}</span></td>
+                <td><span class="badge bg-{% if u.role == 'global_admin' %}danger{% elif u.role == 'dept_admin' %}primary{% else %}secondary{% endif %}">{{ u.role }}</span></td>
+                <td>{{ u.department.name if u.department else '—' }}</td>
                 <td>{{ u.auth_provider }}</td>
                 <td>{% if u.is_active %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}</td>
                 <td>{{ u.created_at.strftime('%m/%d/%Y') if u.created_at else '' }}</td>

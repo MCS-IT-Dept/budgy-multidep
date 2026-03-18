@@ -3,7 +3,7 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-lg-8">
-        <h2>{% if edit %}<i class="bi bi-pencil"></i> Edit Purchase{% else %}<i class="bi bi-plus-lg"></i> New Purchase{% endif %}</h2>
+        <h2>{% if edit %}<i class="bi bi-pencil"></i> Edit Purchase{% else %}<i class="bi bi-plus-lg"></i> New Purchase{% endif %} — {{ department.name }}</h2>
         <div class="card">
             <div class="card-body">
                 <form method="POST" enctype="multipart/form-data" novalidate>
@@ -108,7 +108,7 @@
                         <button type="submit" class="btn btn-primary">
                             {% if edit %}Update Purchase{% else %}Submit Purchase{% endif %}
                         </button>
-                        <a href="{{ url_for('purchases.index') }}" class="btn btn-outline-secondary">Cancel</a>
+                        <a href="{{ url_for('purchases.index', dept_id=department.id) }}" class="btn btn-outline-secondary">Cancel</a>
                     </div>
                 </form>
             </div>
@@ -160,7 +160,7 @@ vendorInput.addEventListener('input', function() {
     const q = this.value.trim();
     if (q.length < 2) { suggestions.innerHTML = ''; return; }
     vendorTimeout = setTimeout(() => {
-        fetch('{{ url_for("purchases.vendor_autocomplete") }}?q=' + encodeURIComponent(q))
+        fetch('{{ url_for("purchases.vendor_autocomplete", dept_id=department.id) }}?q=' + encodeURIComponent(q))
             .then(r => r.json())
             .then(data => {
                 suggestions.innerHTML = data.results.map(v =>

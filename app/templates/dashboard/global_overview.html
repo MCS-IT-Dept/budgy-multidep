@@ -1,0 +1,166 @@
+{% extends "layouts/base.html" %}
+{% block title %}Global Dashboard{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-speedometer2"></i> Global Dashboard</h2>
+    <form method="GET" class="d-flex gap-2">
+        <select name="fy" class="form-select form-select-sm" onchange="this.form.submit()">
+            {% for fy in fiscal_years %}
+            <option value="{{ fy.id }}" {% if fy.id == fiscal_year.id %}selected{% endif %}>{{ fy.label }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+<!-- Overall Totals -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center border-primary">
+            <div class="card-body">
+                <h6 class="text-muted">Total Budget</h6>
+                <h3 class="text-primary">${{ "{:,.2f}".format(overall.total_allocated) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-success">
+            <div class="card-body">
+                <h6 class="text-muted">Approved Spent</h6>
+                <h3 class="text-success">${{ "{:,.2f}".format(overall.total_spent) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center border-warning">
+            <div class="card-body">
+                <h6 class="text-muted">Pending</h6>
+                <h3 class="text-warning">${{ "{:,.2f}".format(overall.total_pending) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center {% if overall.total_remaining < 0 %}border-danger{% else %}border-info{% endif %}">
+            <div class="card-body">
+                <h6 class="text-muted">Remaining</h6>
+                <h3 class="{% if overall.total_remaining < 0 %}text-danger{% else %}text-info{% endif %}">${{ "{:,.2f}".format(overall.total_remaining) }}</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Overall Progress -->
+<div class="mb-4">
+    <div class="d-flex justify-content-between">
+        <small>Overall Budget Usage</small>
+        <small>{{ overall.pct_used }}%</small>
+    </div>
+    <div class="progress" style="height: 24px;">
+        {% set bar_class = "bg-success" %}
+        {% if overall.pct_used|float >= 90 %}{% set bar_class = "bg-danger" %}
+        {% elif overall.pct_used|float >= 75 %}{% set bar_class = "bg-warning" %}{% endif %}
+        <div class="progress-bar {{ bar_class }}" style="width: {{ [overall.pct_used|float, 100]|min }}%">
+            {{ overall.pct_used }}%
+        </div>
+    </div>
+</div>
+
+<!-- Department Breakdown -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Department Budgets &mdash; FY {{ fiscal_year.label }}</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Department</th>
+                    <th class="text-end">Allocated</th>
+                    <th class="text-end">Approved Spent</th>
+                    <th class="text-end">Pending</th>
+                    <th class="text-end">Remaining</th>
+                    <th class="text-end">% Used</th>
+                    <th style="width: 200px;">Progress</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ds in dept_summaries %}
+                {% set t = ds.totals %}
+                {% set row_class = "" %}
+                {% if t.pct_used|float >= 100 %}{% set row_class = "budget-danger" %}
+                {% elif t.pct_used|float >= 85 %}{% set row_class = "budget-warning" %}{% endif %}
+                <tr class="{{ row_class }}">
+                    <td><strong>{{ ds.department.name }}</strong></td>
+                    <td class="text-end">${{ "{:,.2f}".format(t.total_allocated) }}</td>
+                    <td class="text-end">${{ "{:,.2f}".format(t.total_spent) }}</td>
+                    <td class="text-end">${{ "{:,.2f}".format(t.total_pending) }}</td>
+                    <td class="text-end {% if t.total_remaining < 0 %}text-danger fw-bold{% endif %}">${{ "{:,.2f}".format(t.total_remaining) }}</td>
+                    <td class="text-end">{{ t.pct_used }}%</td>
+                    <td>
+                        <div class="progress" style="height: 18px;">
+                            {% set pbar = "bg-success" %}
+                            {% if t.pct_used|float >= 100 %}{% set pbar = "bg-danger" %}
+                            {% elif t.pct_used|float >= 85 %}{% set pbar = "bg-warning" %}{% endif %}
+                            <div class="progress-bar {{ pbar }}" style="width: {{ [t.pct_used|float, 100]|min }}%">
+                                {{ t.pct_used }}%
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <a href="{{ url_for('dashboard.dept_dashboard', dept_id=ds.department.id, fy=fiscal_year.id) }}" class="btn btn-sm btn-outline-primary">Details</a>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not dept_summaries %}
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-4">
+                        No departments found. <a href="{{ url_for('admin.department_create') }}">Create a department</a>
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Recent Purchases (across all departments) -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Recent Purchases (All Departments)</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Date</th>
+                    <th>Department</th>
+                    <th>Vendor</th>
+                    <th>Line Item</th>
+                    <th class="text-end">Amount</th>
+                    <th>Status</th>
+                    <th>Submitted By</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in recent_purchases %}
+                <tr>
+                    <td>{{ p.purchase_date.strftime('%m/%d/%Y') }}</td>
+                    <td>{{ p.department.name if p.department else 'N/A' }}</td>
+                    <td><a href="{{ url_for('purchases.detail', dept_id=p.department_id, id=p.id) }}">{{ p.vendor_name }}</a></td>
+                    <td>{{ p.line_item.code if p.line_item else 'N/A' }}</td>
+                    <td class="text-end">${{ "{:,.2f}".format(p.amount) }}</td>
+                    <td>
+                        {% set badge = {"submitted": "warning", "reviewed": "info", "approved": "success", "rejected": "danger"} %}
+                        <span class="badge bg-{{ badge.get(p.status, 'secondary') }}">{{ p.status }}</span>
+                    </td>
+                    <td>{{ p.submitter.display_name if p.submitter else 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+                {% if not recent_purchases %}
+                <tr><td colspan="7" class="text-center text-muted py-3">No purchases yet.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

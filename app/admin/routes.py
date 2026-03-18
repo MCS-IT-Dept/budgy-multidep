@@ -10,11 +10,14 @@ from flask import (
     flash,
     request,
     abort,
+    g,
 )
 from flask_login import login_required, current_user
 
 from app import db
 from app.models.user import User
+from app.models.department import Department
+from app.models.payment_method import PaymentMethod
 from app.models.budget_line_item import BudgetLineItem
 from app.models.budget_allocation import BudgetAllocation
 from app.models.fiscal_year import FiscalYear
@@ -23,61 +26,116 @@ from app.models.document import Document
 from app.models.activity_log import ActivityLog
 from app.services.activity import log_activity
 from app.services.storage import get_storage_backend
-from app.utils.decorators import admin_required
+from app.services.department import get_all_departments
+from app.utils.decorators import global_admin_required, dept_admin_required, department_access_required
 from app.utils.forms import (
     BudgetAllocationForm,
     FiscalYearForm,
     BudgetLineItemForm,
     UserEditForm,
     PurchaseStatusForm,
+    DepartmentForm,
+    PaymentMethodForm,
 )
 
 admin_bp = Blueprint("admin", __name__, template_folder="../templates/admin")
 
 
-@admin_bp.before_request
-def check_admin():
-    if not current_user.is_authenticated:
-        return redirect(url_for("auth.login"))
-    if not current_user.is_admin:
-        abort(403)
+# ══════════════════════════════════════════════════════════════
+# GLOBAL ADMIN routes (require global_admin role)
+# ══════════════════════════════════════════════════════════════
 
-
-# ── Dashboard ──────────────────────────────────────────────────
 @admin_bp.route("/")
+@login_required
+@global_admin_required
 def index():
     user_count = User.query.count()
     purchase_count = Purchase.query.count()
+    dept_count = Department.query.count()
     fy_count = FiscalYear.query.count()
     recent_logs = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(20).all()
     return render_template(
         "admin/index.html",
         user_count=user_count,
         purchase_count=purchase_count,
+        dept_count=dept_count,
         fy_count=fy_count,
         recent_logs=recent_logs,
     )
 
 
-# ── Users ──────────────────────────────────────────────────────
+# ── Departments ───────────────────────────────────────────────
+@admin_bp.route("/departments")
+@login_required
+@global_admin_required
+def departments():
+    depts = Department.query.order_by(Department.name).all()
+    return render_template("admin/departments.html", departments=depts)
+
+
+@admin_bp.route("/departments/new", methods=["GET", "POST"])
+@login_required
+@global_admin_required
+def department_create():
+    form = DepartmentForm()
+    if form.validate_on_submit():
+        dept = Department(name=form.name.data, slug=form.slug.data)
+        db.session.add(dept)
+        db.session.commit()
+        log_activity(current_user.id, "department_created", "department", dept.id)
+        flash("Department created.", "success")
+        return redirect(url_for("admin.departments"))
+    return render_template("admin/department_form.html", form=form, edit=False)
+
+
+@admin_bp.route("/departments/<int:id>/edit", methods=["GET", "POST"])
+@login_required
+@global_admin_required
+def department_edit(id):
+    dept = Department.query.get_or_404(id)
+    form = DepartmentForm(obj=dept)
+    if form.validate_on_submit():
+        dept.name = form.name.data
+        dept.slug = form.slug.data
+        db.session.commit()
+        log_activity(current_user.id, "department_updated", "department", dept.id)
+        flash("Department updated.", "success")
+        return redirect(url_for("admin.departments"))
+    return render_template("admin/department_form.html", form=form, edit=True, dept=dept)
+
+
+# ── Users (global admin only) ────────────────────────────────
 @admin_bp.route("/users")
+@login_required
+@global_admin_required
 def users():
-    users = User.query.order_by(User.display_name).all()
-    return render_template("admin/users.html", users=users)
+    all_users = User.query.order_by(User.display_name).all()
+    return render_template("admin/users.html", users=all_users)
 
 
 @admin_bp.route("/users/<int:id>/edit", methods=["GET", "POST"])
+@login_required
+@global_admin_required
 def user_edit(id):
     user = User.query.get_or_404(id)
     form = UserEditForm(obj=user)
 
+    # Populate department choices
+    depts = get_all_departments()
+    form.department_id.choices = [(0, "— None (Global Admin) —")] + [
+        (d.id, d.name) for d in depts
+    ]
+
     if request.method == "GET":
         form.is_active.data = "1" if user.is_active else "0"
+        form.department_id.data = user.department_id or 0
 
     if form.validate_on_submit():
         user.display_name = form.display_name.data
         user.role = form.role.data
         user.is_active = form.is_active.data == "1"
+        dept_val = form.department_id.data
+        user.department_id = dept_val if dept_val and dept_val != 0 else None
         db.session.commit()
         log_activity(current_user.id, "user_updated", "user", user.id)
         flash(f"User {user.email} updated.", "success")
@@ -86,14 +144,18 @@ def user_edit(id):
     return render_template("admin/user_edit.html", form=form, user=user)
 
 
-# ── Fiscal Years ───────────────────────────────────────────────
+# ── Fiscal Years (global, shared across departments) ─────────
 @admin_bp.route("/fiscal-years")
+@login_required
+@global_admin_required
 def fiscal_years():
     fys = FiscalYear.query.order_by(FiscalYear.start_date.desc()).all()
     return render_template("admin/fiscal_years.html", fiscal_years=fys)
 
 
 @admin_bp.route("/fiscal-years/new", methods=["GET", "POST"])
+@login_required
+@global_admin_required
 def fiscal_year_create():
     form = FiscalYearForm()
     if form.validate_on_submit():
@@ -111,6 +173,8 @@ def fiscal_year_create():
 
 
 @admin_bp.route("/fiscal-years/<int:id>/edit", methods=["GET", "POST"])
+@login_required
+@global_admin_required
 def fiscal_year_edit(id):
     fy = FiscalYear.query.get_or_404(id)
     form = FiscalYearForm(obj=fy)
@@ -125,63 +189,188 @@ def fiscal_year_edit(id):
     return render_template("admin/fiscal_year_form.html", form=form, edit=True, fy=fy)
 
 
-# ── Budget Line Items ─────────────────────────────────────────
-@admin_bp.route("/line-items")
-def line_items():
-    items = BudgetLineItem.query.order_by(BudgetLineItem.code).all()
-    return render_template("admin/line_items.html", items=items)
+# ── Activity Log (global admin) ──────────────────────────────
+@admin_bp.route("/activity")
+@login_required
+@global_admin_required
+def activity():
+    page = request.args.get("page", 1, type=int)
+    pagination = ActivityLog.query.order_by(ActivityLog.created_at.desc()).paginate(
+        page=page, per_page=50, error_out=False
+    )
+    return render_template("admin/activity.html", logs=pagination.items, pagination=pagination)
 
 
-@admin_bp.route("/line-items/new", methods=["GET", "POST"])
-def line_item_create():
+# ══════════════════════════════════════════════════════════════
+# DEPARTMENT-SCOPED ADMIN routes (dept_admin or global_admin)
+# ══════════════════════════════════════════════════════════════
+
+# ── Payment Methods ───────────────────────────────────────────
+@admin_bp.route("/dept/<int:dept_id>/payment-methods")
+@login_required
+@department_access_required
+@dept_admin_required
+def payment_methods(dept_id):
+    department = g.department
+    methods = (
+        PaymentMethod.query
+        .filter_by(department_id=department.id)
+        .order_by(PaymentMethod.sort_order, PaymentMethod.name)
+        .all()
+    )
+    return render_template("admin/payment_methods.html", methods=methods, department=department)
+
+
+@admin_bp.route("/dept/<int:dept_id>/payment-methods/new", methods=["GET", "POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def payment_method_create(dept_id):
+    department = g.department
+    form = PaymentMethodForm()
+    if form.validate_on_submit():
+        pm = PaymentMethod(
+            department_id=department.id,
+            name=form.name.data,
+            sort_order=form.sort_order.data or 0,
+        )
+        db.session.add(pm)
+        db.session.commit()
+        log_activity(
+            current_user.id, "payment_method_created", "payment_method", pm.id,
+            department_id=department.id,
+        )
+        flash("Payment method created.", "success")
+        return redirect(url_for("admin.payment_methods", dept_id=department.id))
+    return render_template("admin/payment_method_form.html", form=form, edit=False, department=department)
+
+
+@admin_bp.route("/dept/<int:dept_id>/payment-methods/<int:id>/edit", methods=["GET", "POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def payment_method_edit(dept_id, id):
+    department = g.department
+    pm = PaymentMethod.query.get_or_404(id)
+    if pm.department_id != department.id:
+        abort(404)
+
+    form = PaymentMethodForm(obj=pm)
+    if form.validate_on_submit():
+        pm.name = form.name.data
+        pm.sort_order = form.sort_order.data or 0
+        db.session.commit()
+        log_activity(
+            current_user.id, "payment_method_updated", "payment_method", pm.id,
+            department_id=department.id,
+        )
+        flash("Payment method updated.", "success")
+        return redirect(url_for("admin.payment_methods", dept_id=department.id))
+    return render_template("admin/payment_method_form.html", form=form, edit=True, pm=pm, department=department)
+
+
+# ── Budget Line Items (department-scoped) ─────────────────────
+@admin_bp.route("/dept/<int:dept_id>/line-items")
+@login_required
+@department_access_required
+@dept_admin_required
+def line_items(dept_id):
+    department = g.department
+    items = (
+        BudgetLineItem.query
+        .filter_by(department_id=department.id)
+        .order_by(BudgetLineItem.code)
+        .all()
+    )
+    return render_template("admin/line_items.html", items=items, department=department)
+
+
+@admin_bp.route("/dept/<int:dept_id>/line-items/new", methods=["GET", "POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def line_item_create(dept_id):
+    department = g.department
     form = BudgetLineItemForm()
     if form.validate_on_submit():
-        item = BudgetLineItem(code=form.code.data, name=form.name.data)
+        item = BudgetLineItem(
+            code=form.code.data,
+            name=form.name.data,
+            department_id=department.id,
+        )
         db.session.add(item)
         db.session.commit()
-        log_activity(current_user.id, "line_item_created", "budget_line_item", item.id)
+        log_activity(
+            current_user.id, "line_item_created", "budget_line_item", item.id,
+            department_id=department.id,
+        )
         flash("Line item created.", "success")
-        return redirect(url_for("admin.line_items"))
-    return render_template("admin/line_item_form.html", form=form, edit=False)
+        return redirect(url_for("admin.line_items", dept_id=department.id))
+    return render_template("admin/line_item_form.html", form=form, edit=False, department=department)
 
 
-@admin_bp.route("/line-items/<int:id>/edit", methods=["GET", "POST"])
-def line_item_edit(id):
+@admin_bp.route("/dept/<int:dept_id>/line-items/<int:id>/edit", methods=["GET", "POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def line_item_edit(dept_id, id):
+    department = g.department
     item = BudgetLineItem.query.get_or_404(id)
+    if item.department_id != department.id:
+        abort(404)
+
     form = BudgetLineItemForm(obj=item)
     if form.validate_on_submit():
         item.code = form.code.data
         item.name = form.name.data
         db.session.commit()
-        log_activity(current_user.id, "line_item_updated", "budget_line_item", item.id)
+        log_activity(
+            current_user.id, "line_item_updated", "budget_line_item", item.id,
+            department_id=department.id,
+        )
         flash("Line item updated.", "success")
-        return redirect(url_for("admin.line_items"))
-    return render_template("admin/line_item_form.html", form=form, edit=True, item=item)
+        return redirect(url_for("admin.line_items", dept_id=department.id))
+    return render_template("admin/line_item_form.html", form=form, edit=True, item=item, department=department)
 
 
-# ── Budget Allocations ─────────────────────────────────────────
-@admin_bp.route("/allocations")
-def allocations():
+# ── Budget Allocations (department-scoped) ────────────────────
+@admin_bp.route("/dept/<int:dept_id>/allocations")
+@login_required
+@department_access_required
+@dept_admin_required
+def allocations(dept_id):
+    department = g.department
     fy_id = request.args.get("fy", type=int)
-    query = BudgetAllocation.query
+
+    query = (
+        BudgetAllocation.query
+        .join(BudgetLineItem)
+        .filter(BudgetLineItem.department_id == department.id)
+    )
 
     if fy_id:
-        query = query.filter_by(fiscal_year_id=fy_id)
+        query = query.filter(BudgetAllocation.fiscal_year_id == fy_id)
 
     allocs = (
-        query.join(BudgetLineItem)
-        .join(FiscalYear)
+        query.join(FiscalYear)
         .order_by(FiscalYear.start_date.desc(), BudgetLineItem.code)
         .all()
     )
     fiscal_years = FiscalYear.query.order_by(FiscalYear.start_date.desc()).all()
     return render_template(
-        "admin/allocations.html", allocations=allocs, fiscal_years=fiscal_years
+        "admin/allocations.html",
+        allocations=allocs,
+        fiscal_years=fiscal_years,
+        department=department,
     )
 
 
-@admin_bp.route("/allocations/new", methods=["GET", "POST"])
-def allocation_create():
+@admin_bp.route("/dept/<int:dept_id>/allocations/new", methods=["GET", "POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def allocation_create(dept_id):
+    department = g.department
     form = BudgetAllocationForm()
     form.fiscal_year_id.choices = [
         (fy.id, fy.label)
@@ -189,7 +378,9 @@ def allocation_create():
     ]
     form.budget_line_item_id.choices = [
         (i.id, i.display_label)
-        for i in BudgetLineItem.query.filter_by(is_active=True).order_by(BudgetLineItem.code).all()
+        for i in BudgetLineItem.query.filter_by(
+            is_active=True, department_id=department.id
+        ).order_by(BudgetLineItem.code).all()
     ]
 
     if form.validate_on_submit():
@@ -199,7 +390,7 @@ def allocation_create():
         ).first()
         if existing:
             flash("An allocation for this line item and fiscal year already exists. Edit it instead.", "warning")
-            return redirect(url_for("admin.allocation_edit", id=existing.id))
+            return redirect(url_for("admin.allocation_edit", dept_id=department.id, id=existing.id))
 
         alloc = BudgetAllocation(
             fiscal_year_id=form.fiscal_year_id.data,
@@ -208,16 +399,28 @@ def allocation_create():
         )
         db.session.add(alloc)
         db.session.commit()
-        log_activity(current_user.id, "allocation_created", "budget_allocation", alloc.id)
+        log_activity(
+            current_user.id, "allocation_created", "budget_allocation", alloc.id,
+            department_id=department.id,
+        )
         flash("Budget allocation created.", "success")
-        return redirect(url_for("admin.allocations"))
+        return redirect(url_for("admin.allocations", dept_id=department.id))
 
-    return render_template("admin/allocation_form.html", form=form, edit=False)
+    return render_template("admin/allocation_form.html", form=form, edit=False, department=department)
 
 
-@admin_bp.route("/allocations/<int:id>/edit", methods=["GET", "POST"])
-def allocation_edit(id):
+@admin_bp.route("/dept/<int:dept_id>/allocations/<int:id>/edit", methods=["GET", "POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def allocation_edit(dept_id, id):
+    department = g.department
     alloc = BudgetAllocation.query.get_or_404(id)
+
+    # Verify this allocation belongs to this department
+    if alloc.line_item.department_id != department.id:
+        abort(404)
+
     form = BudgetAllocationForm(obj=alloc)
     form.fiscal_year_id.choices = [
         (fy.id, fy.label)
@@ -225,7 +428,9 @@ def allocation_edit(id):
     ]
     form.budget_line_item_id.choices = [
         (i.id, i.display_label)
-        for i in BudgetLineItem.query.filter_by(is_active=True).order_by(BudgetLineItem.code).all()
+        for i in BudgetLineItem.query.filter_by(
+            is_active=True, department_id=department.id
+        ).order_by(BudgetLineItem.code).all()
     ]
 
     if form.validate_on_submit():
@@ -233,26 +438,34 @@ def allocation_edit(id):
         alloc.budget_line_item_id = form.budget_line_item_id.data
         alloc.allocated_amount = form.allocated_amount.data
         db.session.commit()
-        log_activity(current_user.id, "allocation_updated", "budget_allocation", alloc.id)
+        log_activity(
+            current_user.id, "allocation_updated", "budget_allocation", alloc.id,
+            department_id=department.id,
+        )
         flash("Budget allocation updated.", "success")
-        return redirect(url_for("admin.allocations"))
+        return redirect(url_for("admin.allocations", dept_id=department.id))
 
-    return render_template("admin/allocation_form.html", form=form, edit=True, alloc=alloc)
+    return render_template("admin/allocation_form.html", form=form, edit=True, alloc=alloc, department=department)
 
 
-# ── Allocation CSV Import ──────────────────────────────────────
-@admin_bp.route("/allocations/import", methods=["GET", "POST"])
-def allocation_import():
+# ── Allocation CSV Import (department-scoped) ─────────────────
+@admin_bp.route("/dept/<int:dept_id>/allocations/import", methods=["GET", "POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def allocation_import(dept_id):
+    department = g.department
+
     if request.method == "POST":
         file = request.files.get("csv_file")
         if not file or not file.filename.endswith(".csv"):
             flash("Please upload a CSV file.", "danger")
-            return redirect(url_for("admin.allocation_import"))
+            return redirect(url_for("admin.allocation_import", dept_id=department.id))
 
         fy_id = request.form.get("fiscal_year_id", type=int)
         if not fy_id:
             flash("Please select a fiscal year.", "danger")
-            return redirect(url_for("admin.allocation_import"))
+            return redirect(url_for("admin.allocation_import", dept_id=department.id))
 
         reader = csv.DictReader(io.TextIOWrapper(file, encoding="utf-8-sig"))
         count = 0
@@ -262,9 +475,11 @@ def allocation_import():
             if not code or not amount:
                 continue
 
-            item = BudgetLineItem.query.filter_by(code=code).first()
+            item = BudgetLineItem.query.filter_by(
+                code=code, department_id=department.id
+            ).first()
             if not item:
-                flash(f"Line item code '{code}' not found, skipping.", "warning")
+                flash(f"Line item code '{code}' not found in this department, skipping.", "warning")
                 continue
 
             try:
@@ -289,24 +504,44 @@ def allocation_import():
 
         db.session.commit()
         flash(f"Imported/updated {count} allocations.", "success")
-        return redirect(url_for("admin.allocations"))
+        return redirect(url_for("admin.allocations", dept_id=department.id))
 
     fiscal_years = FiscalYear.query.order_by(FiscalYear.start_date.desc()).all()
-    return render_template("admin/allocation_import.html", fiscal_years=fiscal_years)
+    return render_template("admin/allocation_import.html", fiscal_years=fiscal_years, department=department)
 
 
-# ── Purchases Admin ────────────────────────────────────────────
-@admin_bp.route("/purchases")
-def purchases():
+# ── Purchases Admin (department-scoped) ───────────────────────
+@admin_bp.route("/dept/<int:dept_id>/purchases")
+@login_required
+@department_access_required
+@dept_admin_required
+def purchases(dept_id):
+    department = g.department
     page = request.args.get("page", 1, type=int)
-    query = Purchase.query.order_by(Purchase.created_at.desc())
+    query = (
+        Purchase.query
+        .filter_by(department_id=department.id)
+        .order_by(Purchase.created_at.desc())
+    )
     pagination = query.paginate(page=page, per_page=50, error_out=False)
-    return render_template("admin/purchases.html", purchases=pagination.items, pagination=pagination)
+    return render_template(
+        "admin/purchases.html",
+        purchases=pagination.items,
+        pagination=pagination,
+        department=department,
+    )
 
 
-@admin_bp.route("/purchases/<int:id>/delete", methods=["POST"])
-def purchase_delete(id):
+@admin_bp.route("/dept/<int:dept_id>/purchases/<int:id>/delete", methods=["POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def purchase_delete(dept_id, id):
+    department = g.department
     purchase = Purchase.query.get_or_404(id)
+
+    if purchase.department_id != department.id:
+        abort(404)
 
     # Delete associated documents from storage
     storage = get_storage_backend()
@@ -318,24 +553,49 @@ def purchase_delete(id):
 
     db.session.delete(purchase)
     db.session.commit()
-    log_activity(current_user.id, "purchase_deleted", "purchase", id)
-    flash("Purchase deleted.", "success")
-    return redirect(url_for("admin.purchases"))
-
-
-# ── Documents Admin ────────────────────────────────────────────
-@admin_bp.route("/documents")
-def documents():
-    page = request.args.get("page", 1, type=int)
-    pagination = Document.query.order_by(Document.created_at.desc()).paginate(
-        page=page, per_page=50, error_out=False
+    log_activity(
+        current_user.id, "purchase_deleted", "purchase", id,
+        department_id=department.id,
     )
-    return render_template("admin/documents.html", documents=pagination.items, pagination=pagination)
+    flash("Purchase deleted.", "success")
+    return redirect(url_for("admin.purchases", dept_id=department.id))
 
 
-@admin_bp.route("/documents/<int:id>/delete", methods=["POST"])
-def document_delete(id):
+# ── Documents Admin (department-scoped) ───────────────────────
+@admin_bp.route("/dept/<int:dept_id>/documents")
+@login_required
+@department_access_required
+@dept_admin_required
+def documents(dept_id):
+    department = g.department
+    page = request.args.get("page", 1, type=int)
+    pagination = (
+        Document.query
+        .join(Purchase)
+        .filter(Purchase.department_id == department.id)
+        .order_by(Document.created_at.desc())
+        .paginate(page=page, per_page=50, error_out=False)
+    )
+    return render_template(
+        "admin/documents.html",
+        documents=pagination.items,
+        pagination=pagination,
+        department=department,
+    )
+
+
+@admin_bp.route("/dept/<int:dept_id>/documents/<int:id>/delete", methods=["POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def document_delete(dept_id, id):
+    department = g.department
     doc = Document.query.get_or_404(id)
+    purchase = Purchase.query.get_or_404(doc.purchase_id)
+
+    if purchase.department_id != department.id:
+        abort(404)
+
     storage = get_storage_backend()
     try:
         storage.delete(doc.object_key)
@@ -343,16 +603,31 @@ def document_delete(id):
         pass
     db.session.delete(doc)
     db.session.commit()
-    log_activity(current_user.id, "document_deleted", "document", id)
-    flash("Document deleted.", "success")
-    return redirect(url_for("admin.documents"))
-
-
-# ── Activity Log ───────────────────────────────────────────────
-@admin_bp.route("/activity")
-def activity():
-    page = request.args.get("page", 1, type=int)
-    pagination = ActivityLog.query.order_by(ActivityLog.created_at.desc()).paginate(
-        page=page, per_page=50, error_out=False
+    log_activity(
+        current_user.id, "document_deleted", "document", id,
+        department_id=department.id,
     )
-    return render_template("admin/activity.html", logs=pagination.items, pagination=pagination)
+    flash("Document deleted.", "success")
+    return redirect(url_for("admin.documents", dept_id=department.id))
+
+
+# ── Department Activity Log ───────────────────────────────────
+@admin_bp.route("/dept/<int:dept_id>/activity")
+@login_required
+@department_access_required
+@dept_admin_required
+def dept_activity(dept_id):
+    department = g.department
+    page = request.args.get("page", 1, type=int)
+    pagination = (
+        ActivityLog.query
+        .filter_by(department_id=department.id)
+        .order_by(ActivityLog.created_at.desc())
+        .paginate(page=page, per_page=50, error_out=False)
+    )
+    return render_template(
+        "admin/activity.html",
+        logs=pagination.items,
+        pagination=pagination,
+        department=department,
+    )
