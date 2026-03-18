@@ -1,0 +1,276 @@
+{% extends "layouts/base.html" %}
+{% block title %}Reports - {{ department.name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-bar-chart-line"></i> Purchase Report — {{ department.name }}</h2>
+    <a href="{{ url_for('reports.dept_report_export', dept_id=department.id, **request.args) }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-download"></i> Export CSV
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label form-label-sm">Date From</label>
+                <input type="date" name="date_from" class="form-control form-control-sm" value="{{ params.date_from }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm">Date To</label>
+                <input type="date" name="date_to" class="form-control form-control-sm" value="{{ params.date_to }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm">Status</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">All (excl. rejected)</option>
+                    {% for s in statuses %}
+                    <option value="{{ s }}" {% if params.status == s %}selected{% endif %}>{{ s|title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm">Line Item</label>
+                <select name="line_item" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    {% for li in line_items %}
+                    <option value="{{ li.id }}" {% if params.line_item_id == li.id %}selected{% endif %}>{{ li.code }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm">Payment Method</label>
+                <select name="payment_method" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    {% for pm in payment_methods %}
+                    <option value="{{ pm }}" {% if params.payment_method == pm %}selected{% endif %}>{{ pm }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label form-label-sm">Tax Status</label>
+                <select name="tax_exempt_status" class="form-select form-select-sm">
+                    <option value="">All</option>
+                    {% for val, label in tax_exempt_choices %}
+                    {% if val %}
+                    <option value="{{ val }}" {% if params.tax_exempt_status == val %}selected{% endif %}>{{ label }}</option>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-12 mt-2">
+                <button type="submit" class="btn btn-sm btn-primary">Run Report</button>
+                <a href="{{ url_for('reports.dept_report', dept_id=department.id) }}" class="btn btn-sm btn-outline-secondary">Clear Filters</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card text-center border-primary">
+            <div class="card-body">
+                <h6 class="text-muted">Total Purchases</h6>
+                <h3 class="text-primary">{{ report.purchase_count }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center border-success">
+            <div class="card-body">
+                <h6 class="text-muted">Total Amount</h6>
+                <h3 class="text-success">${{ "{:,.2f}".format(report.total_amount) }}</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center border-info">
+            <div class="card-body">
+                <h6 class="text-muted">Date Range</h6>
+                <h5 class="text-info">
+                    {% if params.date_from and params.date_to %}
+                        {{ params.date_from }} to {{ params.date_to }}
+                    {% elif params.date_from %}
+                        From {{ params.date_from }}
+                    {% elif params.date_to %}
+                        Through {{ params.date_to }}
+                    {% else %}
+                        All Dates
+                    {% endif %}
+                </h5>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if report.purchase_count > 0 %}
+<!-- Breakdowns -->
+<div class="row mb-4">
+    <!-- By Status -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">By Status</h6></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>Status</th><th class="text-end">Count</th><th class="text-end">Amount</th></tr></thead>
+                    <tbody>
+                        {% for status, data in report.by_status.items() %}
+                        <tr>
+                            <td>
+                                {% set badge = {"submitted": "warning", "reviewed": "info", "approved": "success", "rejected": "danger"} %}
+                                <span class="badge bg-{{ badge.get(status, 'secondary') }}">{{ status|title }}</span>
+                            </td>
+                            <td class="text-end">{{ data.count }}</td>
+                            <td class="text-end">${{ "{:,.2f}".format(data.total) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- By Line Item -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">By Line Item</h6></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>Line Item</th><th class="text-end">Count</th><th class="text-end">Amount</th></tr></thead>
+                    <tbody>
+                        {% for item, data in report.by_line_item.items() %}
+                        <tr>
+                            <td>{{ item }}</td>
+                            <td class="text-end">{{ data.count }}</td>
+                            <td class="text-end">${{ "{:,.2f}".format(data.total) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- By Payment Method -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">By Payment Method</h6></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>Method</th><th class="text-end">Count</th><th class="text-end">Amount</th></tr></thead>
+                    <tbody>
+                        {% for method, data in report.by_payment.items() %}
+                        <tr>
+                            <td>{{ method }}</td>
+                            <td class="text-end">{{ data.count }}</td>
+                            <td class="text-end">${{ "{:,.2f}".format(data.total) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <!-- By Tax Status -->
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">By Tax Exempt Status</h6></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>Tax Status</th><th class="text-end">Count</th><th class="text-end">Amount</th></tr></thead>
+                    <tbody>
+                        {% for status, data in report.by_tax_status.items() %}
+                        <tr>
+                            <td>{{ status }}</td>
+                            <td class="text-end">{{ data.count }}</td>
+                            <td class="text-end">${{ "{:,.2f}".format(data.total) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Vendors -->
+    <div class="col-md-8">
+        <div class="card h-100">
+            <div class="card-header"><h6 class="mb-0">Top Vendors</h6></div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light"><tr><th>Vendor</th><th class="text-end">Count</th><th class="text-end">Amount</th></tr></thead>
+                    <tbody>
+                        {% for vendor, data in report.by_vendor.items() %}
+                        <tr>
+                            <td>{{ vendor }}</td>
+                            <td class="text-end">{{ data.count }}</td>
+                            <td class="text-end">${{ "{:,.2f}".format(data.total) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Purchase Detail Table -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Purchase Details ({{ report.purchase_count }})</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Date</th>
+                    <th>Vendor</th>
+                    <th>Line Item</th>
+                    <th class="text-end">Amount</th>
+                    <th>Status</th>
+                    <th>Payment</th>
+                    <th>Tax Status</th>
+                    <th>Submitted By</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in report.purchases %}
+                <tr>
+                    <td>{{ p.purchase_date.strftime('%m/%d/%Y') }}</td>
+                    <td><a href="{{ url_for('purchases.detail', dept_id=department.id, id=p.id) }}">{{ p.vendor_name }}</a></td>
+                    <td>{{ p.line_item.code if p.line_item else 'N/A' }}</td>
+                    <td class="text-end">${{ "{:,.2f}".format(p.amount) }}</td>
+                    <td>
+                        {% set badge = {"submitted": "warning", "reviewed": "info", "approved": "success", "rejected": "danger"} %}
+                        <span class="badge bg-{{ badge.get(p.status, 'secondary') }}">{{ p.status }}</span>
+                    </td>
+                    <td>{{ p.payment_method or '—' }}</td>
+                    <td>
+                        {% if p.tax_exempt_status == 'exempt' %}
+                            <span class="badge bg-success">Exempt</span>
+                        {% elif p.tax_exempt_status == 'not_eligible' %}
+                            <span class="badge bg-secondary">Not Eligible</span>
+                        {% elif p.tax_exempt_status == 'reimbursement_required' %}
+                            <span class="badge bg-danger">Reimb. Required</span>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td>{{ p.submitter.display_name if p.submitter else 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-search" style="font-size: 3rem;"></i>
+    <p class="mt-2">No purchases found for the selected filters. Adjust your date range or filters and try again.</p>
+</div>
+{% endif %}
+{% endblock %}

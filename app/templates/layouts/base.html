@@ -38,10 +38,20 @@
                             <i class="bi bi-speedometer2"></i> Global Dashboard
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('reports.global_report') }}">
+                            <i class="bi bi-bar-chart-line"></i> Reports
+                        </a>
+                    </li>
                     {% elif current_user.is_dept_admin and current_user.department_id %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('dashboard.dept_dashboard', dept_id=current_user.department_id) }}">
                             <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('reports.dept_report', dept_id=current_user.department_id) }}">
+                            <i class="bi bi-bar-chart-line"></i> Reports
                         </a>
                     </li>
                     {% endif %}

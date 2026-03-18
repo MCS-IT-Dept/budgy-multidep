@@ -55,6 +55,7 @@ def create_app(config_name=None):
     from app.routes.purchases import purchases_bp
     from app.routes.budget import budget_bp
     from app.routes.documents import documents_bp
+    from app.routes.reports import reports_bp
     from app.auth.routes import auth_bp
     from app.admin.routes import admin_bp
 
@@ -63,6 +64,7 @@ def create_app(config_name=None):
     app.register_blueprint(purchases_bp)
     app.register_blueprint(budget_bp, url_prefix="/budget")
     app.register_blueprint(documents_bp, url_prefix="/documents")
+    app.register_blueprint(reports_bp, url_prefix="/reports")
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(admin_bp, url_prefix="/admin")
 
