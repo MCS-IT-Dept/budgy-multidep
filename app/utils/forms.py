@@ -97,7 +97,7 @@ class UserEditForm(FlaskForm):
     )
     role = SelectField(
         "Role",
-        choices=[("user", "User"), ("dept_admin", "Dept Admin"), ("global_admin", "Global Admin")],
+        choices=[("user", "User"), ("dept_admin", "Dept Admin"), ("director", "Director"), ("global_admin", "Global Admin")],
         validators=[DataRequired()],
     )
     department_id = SelectField(
@@ -120,6 +120,24 @@ class DepartmentForm(FlaskForm):
 class PaymentMethodForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired(), Length(max=100)])
     sort_order = IntegerField("Sort Order", validators=[Optional()], default=0)
+
+
+class ApprovalThresholdForm(FlaskForm):
+    max_amount = DecimalField(
+        "Max Amount ($)",
+        validators=[Optional(), NumberRange(min=0)],
+        places=2,
+    )
+    required_role = SelectField(
+        "Required Role",
+        choices=[
+            ("dept_admin", "Department Admin"),
+            ("director", "Director / Assistant Superintendent"),
+            ("global_admin", "Superintendent / Board"),
+        ],
+        validators=[DataRequired()],
+    )
+    label = StringField("Description (optional)", validators=[Optional(), Length(max=255)])
 
 
 class BrandingForm(FlaskForm):

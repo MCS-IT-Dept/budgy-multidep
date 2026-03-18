@@ -1,0 +1,98 @@
+{% extends "layouts/base.html" %}
+{% block title %}Approval Thresholds - {{ department.name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-shield-check"></i> Approval Thresholds — {{ department.name }}</h2>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('admin.approval_threshold_create', dept_id=department.id) }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg"></i> New Threshold
+        </a>
+        {% if current_user.is_global_admin %}
+        <a href="{{ url_for('admin.departments') }}" class="btn btn-outline-secondary btn-sm">Back</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i>
+    <strong>How it works:</strong> Thresholds define the minimum role required to approve purchases at different dollar amounts.
+    When an admin tries to approve a purchase, the system checks whether their role meets the required level for that amount.
+    If no thresholds are configured, any department admin can approve any amount.
+</div>
+
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>Up To Amount</th>
+                <th>Required Approval By</th>
+                <th>Description</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in thresholds %}
+            <tr>
+                <td>
+                    {% if t.max_amount is not none %}
+                        <strong>${{ "{:,.2f}".format(t.max_amount) }}</strong>
+                    {% else %}
+                        <strong>Unlimited</strong> <small class="text-muted">(no cap)</small>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if t.required_role == 'dept_admin' %}
+                        <span class="badge bg-info">{{ role_labels.get(t.required_role, t.required_role) }}</span>
+                    {% elif t.required_role == 'director' %}
+                        <span class="badge bg-warning text-dark">{{ role_labels.get(t.required_role, t.required_role) }}</span>
+                    {% elif t.required_role == 'global_admin' %}
+                        <span class="badge bg-danger">{{ role_labels.get(t.required_role, t.required_role) }}</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{{ t.required_role }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ t.label or '—' }}</td>
+                <td>
+                    <div class="d-flex gap-1">
+                        <a href="{{ url_for('admin.approval_threshold_edit', dept_id=department.id, id=t.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        <form method="POST" action="{{ url_for('admin.approval_threshold_delete', dept_id=department.id, id=t.id) }}"
+                              onsubmit="return confirm('Delete this threshold?');" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not thresholds %}
+            <tr><td colspan="4" class="text-center text-muted py-4">
+                No approval thresholds configured. Any department admin can approve purchases of any amount.
+            </td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+{% if thresholds %}
+<div class="card mt-3">
+    <div class="card-header"><h6 class="mb-0">Approval Rules Summary</h6></div>
+    <div class="card-body">
+        <ul class="mb-0">
+            {% set ns = namespace(prev_amount=0) %}
+            {% for t in thresholds %}
+            <li>
+                {% if t.max_amount is not none %}
+                    Purchases from <strong>${{ "{:,.2f}".format(ns.prev_amount) }}</strong> to <strong>${{ "{:,.2f}".format(t.max_amount) }}</strong>
+                    {% set ns.prev_amount = t.max_amount %}
+                {% else %}
+                    Purchases above <strong>${{ "{:,.2f}".format(ns.prev_amount) }}</strong>
+                {% endif %}
+                require approval by <strong>{{ role_labels.get(t.required_role, t.required_role) }}</strong>
+                {% if t.label %}<em>({{ t.label }})</em>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
