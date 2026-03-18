@@ -11,6 +11,7 @@ from flask import (
     request,
     abort,
     g,
+    current_app,
 )
 from flask_login import login_required, current_user
 
@@ -24,6 +25,7 @@ from app.models.fiscal_year import FiscalYear
 from app.models.purchase import Purchase
 from app.models.document import Document
 from app.models.activity_log import ActivityLog
+from app.models.organization_settings import OrganizationSettings
 from app.services.activity import log_activity
 from app.services.storage import get_storage_backend
 from app.services.department import get_all_departments
@@ -36,6 +38,7 @@ from app.utils.forms import (
     PurchaseStatusForm,
     DepartmentForm,
     PaymentMethodForm,
+    BrandingForm,
 )
 
 admin_bp = Blueprint("admin", __name__, template_folder="../templates/admin")
@@ -199,6 +202,71 @@ def activity():
         page=page, per_page=50, error_out=False
     )
     return render_template("admin/activity.html", logs=pagination.items, pagination=pagination)
+
+
+# ── Branding (global admin) ───────────────────────────────────
+@admin_bp.route("/branding", methods=["GET", "POST"])
+@login_required
+@global_admin_required
+def branding():
+    settings = OrganizationSettings.get()
+    form = BrandingForm(obj=settings)
+
+    if form.validate_on_submit():
+        settings.organization_name = form.organization_name.data or None
+
+        logo_file = form.logo.data
+        if logo_file and hasattr(logo_file, "filename") and logo_file.filename:
+            from werkzeug.utils import secure_filename
+            import uuid
+
+            filename = secure_filename(logo_file.filename)
+            unique_id = uuid.uuid4().hex[:12]
+            object_key = f"branding/{unique_id}_{filename}"
+
+            # Delete old logo if exists
+            if settings.logo_object_key:
+                storage = get_storage_backend()
+                try:
+                    storage.delete(settings.logo_object_key)
+                except Exception:
+                    pass
+
+            storage = get_storage_backend()
+            storage.save(logo_file, object_key, logo_file.content_type or "image/png")
+
+            settings.logo_filename = filename
+            settings.logo_object_key = object_key
+            settings.logo_content_type = logo_file.content_type or "image/png"
+            settings.logo_storage_backend = current_app.config["STORAGE_BACKEND"]
+
+        db.session.commit()
+        log_activity(current_user.id, "branding_updated", "organization_settings", settings.id)
+        flash("Branding settings updated.", "success")
+        return redirect(url_for("admin.branding"))
+
+    return render_template("admin/branding.html", form=form, settings=settings)
+
+
+@admin_bp.route("/branding/remove-logo", methods=["POST"])
+@login_required
+@global_admin_required
+def branding_remove_logo():
+    settings = OrganizationSettings.get()
+    if settings.logo_object_key:
+        storage = get_storage_backend()
+        try:
+            storage.delete(settings.logo_object_key)
+        except Exception:
+            pass
+        settings.logo_filename = None
+        settings.logo_object_key = None
+        settings.logo_content_type = None
+        settings.logo_storage_backend = None
+        db.session.commit()
+        log_activity(current_user.id, "branding_logo_removed", "organization_settings", settings.id)
+        flash("Logo removed.", "success")
+    return redirect(url_for("admin.branding"))
 
 
 # ══════════════════════════════════════════════════════════════

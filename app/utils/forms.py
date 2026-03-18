@@ -115,3 +115,15 @@ class DepartmentForm(FlaskForm):
 class PaymentMethodForm(FlaskForm):
     name = StringField("Name", validators=[DataRequired(), Length(max=100)])
     sort_order = IntegerField("Sort Order", validators=[Optional()], default=0)
+
+
+class BrandingForm(FlaskForm):
+    organization_name = StringField(
+        "Organization Name", validators=[Optional(), Length(max=255)]
+    )
+    logo = FileField(
+        "Organization Logo",
+        validators=[
+            FileAllowed(["jpg", "jpeg", "png", "svg", "gif"], "Only image files are allowed.")
+        ],
+    )

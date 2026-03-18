@@ -77,9 +77,20 @@ def create_app(config_name=None):
 
     @app.context_processor
     def inject_globals():
+        from app.models.organization_settings import OrganizationSettings
+
         ctx = {
             "current_fiscal_year_label": get_current_fiscal_year_label(),
         }
+
+        try:
+            org = OrganizationSettings.get()
+            ctx["org_name"] = org.organization_name
+            ctx["org_has_logo"] = bool(org.logo_object_key)
+        except Exception:
+            ctx["org_name"] = None
+            ctx["org_has_logo"] = False
+
         if current_user.is_authenticated and current_user.is_global_admin:
             from app.services.department import get_active_departments
             ctx["all_departments"] = get_active_departments()
