@@ -1,0 +1,41 @@
+{% extends "layouts/base.html" %}
+{% block title %}{% if edit %}Edit{% else %}New{% endif %} Approval Threshold{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <h2>{% if edit %}Edit{% else %}New{% endif %} Approval Threshold — {{ department.name }}</h2>
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.max_amount.label.text }}</label>
+                        {{ form.max_amount(class="form-control", step="0.01", min="0") }}
+                        <div class="form-text">
+                            Maximum purchase amount this tier covers. Leave blank for unlimited (catches everything above lower tiers).
+                        </div>
+                        {% for e in form.max_amount.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.required_role.label.text }}</label>
+                        {{ form.required_role(class="form-select") }}
+                        <div class="form-text">
+                            The minimum role required to approve purchases in this tier.
+                        </div>
+                        {% for e in form.required_role.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ form.label.label.text }}</label>
+                        {{ form.label(class="form-control", placeholder="e.g., Routine supplies, Major equipment") }}
+                        {% for e in form.label.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">Save</button>
+                        <a href="{{ url_for('admin.approval_thresholds', dept_id=department.id) }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

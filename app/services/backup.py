@@ -12,6 +12,7 @@ from app.models.payment_method import PaymentMethod
 from app.models.purchase import Purchase
 from app.models.document import Document
 from app.models.organization_settings import OrganizationSettings
+from app.models.approval_threshold import ApprovalThreshold
 
 
 class BackupEncoder(json.JSONEncoder):
@@ -44,6 +45,7 @@ def export_backup():
         "budget_line_items": [],
         "budget_allocations": [],
         "payment_methods": [],
+        "approval_thresholds": [],
         "purchases": [],
         "documents": [],
     }
@@ -108,6 +110,16 @@ def export_backup():
             "name": pm.name,
             "is_active": pm.is_active,
             "sort_order": pm.sort_order,
+        })
+
+    # Approval thresholds
+    for t in ApprovalThreshold.query.order_by(ApprovalThreshold.id).all():
+        data["approval_thresholds"].append({
+            "id": t.id,
+            "department_id": t.department_id,
+            "max_amount": t.max_amount,
+            "required_role": t.required_role,
+            "label": t.label,
         })
 
     # Purchases
@@ -322,6 +334,28 @@ def import_backup(data):
             db.session.add(pm)
             db.session.flush()
             stats["payment_methods"] += 1
+
+    # Approval thresholds - matched by (department, required_role, max_amount)
+    for row in data.get("approval_thresholds", []):
+        new_dept_id = dept_map.get(row["department_id"])
+        if not new_dept_id:
+            continue
+        max_amount = Decimal(str(row["max_amount"])) if row.get("max_amount") is not None else None
+        existing = ApprovalThreshold.query.filter_by(
+            department_id=new_dept_id,
+            required_role=row["required_role"],
+            max_amount=max_amount,
+        ).first()
+        if not existing:
+            t = ApprovalThreshold(
+                department_id=new_dept_id,
+                max_amount=max_amount,
+                required_role=row["required_role"],
+                label=row.get("label"),
+            )
+            db.session.add(t)
+            db.session.flush()
+            stats["approval_thresholds"] = stats.get("approval_thresholds", 0) + 1
 
     # Purchases - matched by (vendor_name, purchase_date, amount, department, fiscal_year)
     for row in data.get("purchases", []):

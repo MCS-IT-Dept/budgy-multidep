@@ -43,7 +43,7 @@
                             <i class="bi bi-bar-chart-line"></i> Reports
                         </a>
                     </li>
-                    {% elif current_user.is_dept_admin and current_user.department_id %}
+                    {% elif current_user.is_manager and current_user.department_id %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('dashboard.dept_dashboard', dept_id=current_user.department_id) }}">
                             <i class="bi bi-speedometer2"></i> Dashboard
@@ -62,7 +62,7 @@
                         </a>
                     </li>
                     {% endif %}
-                    {% if current_user.is_dept_admin and current_user.department_id %}
+                    {% if current_user.is_manager and current_user.department_id %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('budget.index', dept_id=current_user.department_id) }}">
                             <i class="bi bi-piggy-bank"></i> Budget
@@ -75,7 +75,7 @@
                             <i class="bi bi-gear"></i> Admin
                         </a>
                     </li>
-                    {% elif current_user.is_dept_admin and current_user.department_id %}
+                    {% elif (current_user.is_dept_admin or current_user.is_director) and current_user.department_id %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                             <i class="bi bi-gear"></i> Dept Admin
@@ -84,6 +84,7 @@
                             <li><a class="dropdown-item" href="{{ url_for('admin.line_items', dept_id=current_user.department_id) }}">Line Items</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('admin.payment_methods', dept_id=current_user.department_id) }}">Payment Methods</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('admin.allocations', dept_id=current_user.department_id) }}">Allocations</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('admin.approval_thresholds', dept_id=current_user.department_id) }}">Approval Thresholds</a></li>
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{{ url_for('admin.purchases', dept_id=current_user.department_id) }}">Manage Purchases</a></li>
                             <li><a class="dropdown-item" href="{{ url_for('admin.documents', dept_id=current_user.department_id) }}">Manage Documents</a></li>

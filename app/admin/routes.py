@@ -28,6 +28,7 @@ from app.models.purchase import Purchase
 from app.models.document import Document
 from app.models.activity_log import ActivityLog
 from app.models.organization_settings import OrganizationSettings
+from app.models.approval_threshold import ApprovalThreshold
 from app.services.activity import log_activity
 from app.services.storage import get_storage_backend
 from app.services.department import get_all_departments
@@ -40,6 +41,7 @@ from app.utils.forms import (
     PurchaseStatusForm,
     DepartmentForm,
     PaymentMethodForm,
+    ApprovalThresholdForm,
     BrandingForm,
 )
 
@@ -752,6 +754,100 @@ def document_delete(dept_id, id):
     )
     flash("Document deleted.", "success")
     return redirect(url_for("admin.documents", dept_id=department.id))
+
+
+# ── Approval Thresholds (department-scoped) ────────────────
+@admin_bp.route("/dept/<int:dept_id>/approval-thresholds")
+@login_required
+@department_access_required
+@dept_admin_required
+def approval_thresholds(dept_id):
+    department = g.department
+    thresholds = ApprovalThreshold.get_thresholds_for_department(department.id)
+    return render_template(
+        "admin/approval_thresholds.html",
+        thresholds=thresholds,
+        department=department,
+        role_labels=ApprovalThreshold.ROLE_LABELS,
+    )
+
+
+@admin_bp.route("/dept/<int:dept_id>/approval-thresholds/new", methods=["GET", "POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def approval_threshold_create(dept_id):
+    department = g.department
+    form = ApprovalThresholdForm()
+
+    if form.validate_on_submit():
+        threshold = ApprovalThreshold(
+            department_id=department.id,
+            max_amount=form.max_amount.data if form.max_amount.data is not None else None,
+            required_role=form.required_role.data,
+            label=form.label.data or None,
+        )
+        db.session.add(threshold)
+        db.session.commit()
+        log_activity(
+            current_user.id, "approval_threshold_created", "approval_threshold", threshold.id,
+            department_id=department.id,
+        )
+        flash("Approval threshold created.", "success")
+        return redirect(url_for("admin.approval_thresholds", dept_id=department.id))
+
+    return render_template(
+        "admin/approval_threshold_form.html", form=form, edit=False, department=department
+    )
+
+
+@admin_bp.route("/dept/<int:dept_id>/approval-thresholds/<int:id>/edit", methods=["GET", "POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def approval_threshold_edit(dept_id, id):
+    department = g.department
+    threshold = ApprovalThreshold.query.get_or_404(id)
+    if threshold.department_id != department.id:
+        abort(404)
+
+    form = ApprovalThresholdForm(obj=threshold)
+
+    if form.validate_on_submit():
+        threshold.max_amount = form.max_amount.data if form.max_amount.data is not None else None
+        threshold.required_role = form.required_role.data
+        threshold.label = form.label.data or None
+        db.session.commit()
+        log_activity(
+            current_user.id, "approval_threshold_updated", "approval_threshold", threshold.id,
+            department_id=department.id,
+        )
+        flash("Approval threshold updated.", "success")
+        return redirect(url_for("admin.approval_thresholds", dept_id=department.id))
+
+    return render_template(
+        "admin/approval_threshold_form.html", form=form, edit=True, threshold=threshold, department=department
+    )
+
+
+@admin_bp.route("/dept/<int:dept_id>/approval-thresholds/<int:id>/delete", methods=["POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def approval_threshold_delete(dept_id, id):
+    department = g.department
+    threshold = ApprovalThreshold.query.get_or_404(id)
+    if threshold.department_id != department.id:
+        abort(404)
+
+    db.session.delete(threshold)
+    db.session.commit()
+    log_activity(
+        current_user.id, "approval_threshold_deleted", "approval_threshold", id,
+        department_id=department.id,
+    )
+    flash("Approval threshold deleted.", "success")
+    return redirect(url_for("admin.approval_thresholds", dept_id=department.id))
 
 
 # ── Department Activity Log ───────────────────────────────────

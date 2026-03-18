@@ -26,6 +26,7 @@ from app.services.fiscal_year import get_or_create_fiscal_year
 from app.services.department import get_payment_methods_for_department
 from app.services.storage import get_storage_backend, generate_object_key, allowed_file
 from app.services.activity import log_activity
+from app.models.approval_threshold import ApprovalThreshold
 from app.utils.forms import PurchaseForm, PurchaseStatusForm
 from app.utils.decorators import dept_admin_required, department_access_required
 
@@ -239,12 +240,21 @@ def detail(dept_id, id):
     status_form = PurchaseStatusForm(obj=purchase)
     documents = purchase.documents.all()
 
+    # Approval threshold info
+    required_role = ApprovalThreshold.get_required_role(department.id, purchase.amount)
+    role_label = ApprovalThreshold.ROLE_LABELS.get(required_role, required_role)
+    can_approve = ApprovalThreshold.can_approve(department.id, purchase.amount, current_user.role)
+    has_thresholds = bool(ApprovalThreshold.get_thresholds_for_department(department.id))
+
     return render_template(
         "purchases/detail.html",
         purchase=purchase,
         documents=documents,
         status_form=status_form,
         department=department,
+        required_approval_role=role_label,
+        can_approve=can_approve,
+        has_thresholds=has_thresholds,
     )
 
 
@@ -345,8 +355,22 @@ def update_status(dept_id, id):
     form = PurchaseStatusForm()
 
     if form.validate_on_submit():
+        new_status = form.status.data
+
+        # Enforce approval thresholds
+        if new_status == "approved":
+            if not ApprovalThreshold.can_approve(department.id, purchase.amount, current_user.role):
+                required_role = ApprovalThreshold.get_required_role(department.id, purchase.amount)
+                role_label = ApprovalThreshold.ROLE_LABELS.get(required_role, required_role)
+                flash(
+                    f"You do not have authority to approve this ${purchase.amount:,.2f} purchase. "
+                    f"A {role_label} is required to approve purchases of this amount.",
+                    "danger",
+                )
+                return redirect(url_for("purchases.detail", dept_id=department.id, id=id))
+
         old_status = purchase.status
-        purchase.status = form.status.data
+        purchase.status = new_status
         purchase.review_notes = form.review_notes.data
         db.session.commit()
         log_activity(

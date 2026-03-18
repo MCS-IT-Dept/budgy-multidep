@@ -11,7 +11,7 @@ class User(UserMixin, db.Model):
     display_name = db.Column(db.String(255), nullable=False)
     role = db.Column(
         db.String(20), nullable=False, default="user"
-    )  # global_admin, dept_admin, user
+    )  # global_admin, director, dept_admin, user
     auth_provider = db.Column(db.String(50), default="azure_ad")
     azure_oid = db.Column(db.String(255), unique=True, nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
@@ -39,12 +39,16 @@ class User(UserMixin, db.Model):
         return self.role == "dept_admin"
 
     @property
+    def is_director(self):
+        return self.role == "director"
+
+    @property
     def is_admin(self):
         return self.role == "global_admin"
 
     @property
     def is_manager(self):
-        return self.role in ("global_admin", "dept_admin")
+        return self.role in ("global_admin", "director", "dept_admin")
 
     def __repr__(self):
         return f"<User {self.email}>"

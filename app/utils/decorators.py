@@ -29,7 +29,7 @@ def global_admin_required(f):
 
 
 def dept_admin_required(f):
-    return role_required("global_admin", "dept_admin")(f)
+    return role_required("global_admin", "director", "dept_admin")(f)
 
 
 def department_access_required(f):
