@@ -19,6 +19,7 @@ from app.models.budget_line_item import BudgetLineItem
 from app.models.fiscal_year import FiscalYear
 from app.models.department import Department
 from app.utils.decorators import dept_admin_required, global_admin_required, department_access_required
+from app.services.report_pdf import generate_dept_report_pdf, generate_global_report_pdf
 
 reports_bp = Blueprint(
     "reports", __name__, template_folder="../templates/reports"
@@ -252,6 +253,49 @@ def dept_report_export(dept_id):
     )
 
 
+@reports_bp.route("/dept/<int:dept_id>/pdf")
+@login_required
+@department_access_required
+@dept_admin_required
+def dept_report_pdf(dept_id):
+    """Export department report as PDF."""
+    department = g.department
+    params = _get_filter_params()
+
+    query = _build_purchase_query(
+        department_id=department.id,
+        date_from=params["date_from"] or None,
+        date_to=params["date_to"] or None,
+        status=params["status"] or None,
+        line_item_id=params["line_item_id"],
+        payment_method=params["payment_method"] or None,
+        tax_exempt_status=params["tax_exempt_status"] or None,
+    )
+
+    report = _compute_report_data(query)
+
+    from flask import current_app
+    from app.models.organization_settings import OrganizationSettings
+    try:
+        org_name = OrganizationSettings.get().organization_name
+    except Exception:
+        org_name = None
+
+    pdf_bytes = generate_dept_report_pdf(department, report, params, org_name=org_name)
+
+    date_suffix = ""
+    if params["date_from"]:
+        date_suffix += f"_from_{params['date_from']}"
+    if params["date_to"]:
+        date_suffix += f"_to_{params['date_to']}"
+
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename={department.slug}_report{date_suffix}.pdf"},
+    )
+
+
 @reports_bp.route("/")
 @login_required
 @global_admin_required
@@ -369,4 +413,63 @@ def global_report_export():
         output.getvalue(),
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename=global_report{date_suffix}.csv"},
+    )
+
+
+@reports_bp.route("/pdf")
+@login_required
+@global_admin_required
+def global_report_pdf():
+    """Export global report as PDF."""
+    params = _get_filter_params()
+    dept_id = request.args.get("department", type=int)
+
+    query = _build_purchase_query(
+        department_id=dept_id,
+        date_from=params["date_from"] or None,
+        date_to=params["date_to"] or None,
+        status=params["status"] or None,
+        line_item_id=params["line_item_id"],
+        payment_method=params["payment_method"] or None,
+        tax_exempt_status=params["tax_exempt_status"] or None,
+    )
+
+    report = _compute_report_data(query)
+
+    # Breakdown by department
+    by_department = {}
+    for p in report["purchases"]:
+        dept_name = p.department.name if p.department else "N/A"
+        if dept_name not in by_department:
+            by_department[dept_name] = {"count": 0, "total": Decimal("0")}
+        by_department[dept_name]["count"] += 1
+        by_department[dept_name]["total"] += p.amount
+    report["by_department"] = by_department
+
+    selected_dept_name = None
+    if dept_id:
+        dept = Department.query.get(dept_id)
+        if dept:
+            selected_dept_name = dept.name
+
+    from app.models.organization_settings import OrganizationSettings
+    try:
+        org_name = OrganizationSettings.get().organization_name
+    except Exception:
+        org_name = None
+
+    pdf_bytes = generate_global_report_pdf(
+        report, params, org_name=org_name, selected_dept_name=selected_dept_name
+    )
+
+    date_suffix = ""
+    if params["date_from"]:
+        date_suffix += f"_from_{params['date_from']}"
+    if params["date_to"]:
+        date_suffix += f"_to_{params['date_to']}"
+
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=global_report{date_suffix}.pdf"},
     )
