@@ -44,6 +44,11 @@ class PurchaseForm(FlaskForm):
         choices=[("", "— Select —")],
         validators=[Optional()],
     )
+    tax_exempt_status = SelectField(
+        "Tax Exempt Status",
+        choices=Purchase.TAX_EXEMPT_CHOICES,
+        validators=[Optional()],
+    )
     attachments = MultipleFileField(
         "Receipt/Invoice Files",
         validators=[

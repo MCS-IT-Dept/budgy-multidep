@@ -50,6 +50,11 @@
                             {{ form.payment_method(class="form-select") }}
                             {% for e in form.payment_method.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                         </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">{{ form.tax_exempt_status.label.text }}</label>
+                            {{ form.tax_exempt_status(class="form-select") }}
+                            {% for e in form.tax_exempt_status.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        </div>
                     </div>
 
                     <div id="custom-account-fields" class="row" style="display:none;">

@@ -36,6 +36,20 @@
                             {% endif %}
                             <tr><th>Fiscal Year</th><td>{{ purchase.fiscal_year.label if purchase.fiscal_year else 'N/A' }}</td></tr>
                             <tr><th>Payment Method</th><td>{{ purchase.payment_method or '—' }}</td></tr>
+                            <tr>
+                                <th>Tax Exempt Status</th>
+                                <td>
+                                    {% if purchase.tax_exempt_status == 'exempt' %}
+                                        <span class="badge bg-success">Tax Exemption Applied</span>
+                                    {% elif purchase.tax_exempt_status == 'not_eligible' %}
+                                        <span class="badge bg-secondary">Not Eligible for Tax Exemption</span>
+                                    {% elif purchase.tax_exempt_status == 'reimbursement_required' %}
+                                        <span class="badge bg-danger">Tax Charged -- Reimbursement Required</span>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                            </tr>
                             <tr><th>PO Number</th><td>{{ purchase.po_number or '—' }}</td></tr>
                             <tr><th>Invoice Number</th><td>{{ purchase.invoice_number or '—' }}</td></tr>
                             <tr><th>Description</th><td>{{ purchase.description or '—' }}</td></tr>

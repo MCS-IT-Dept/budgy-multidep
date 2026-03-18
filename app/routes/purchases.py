@@ -174,6 +174,7 @@ def create(dept_id):
             po_number=form.po_number.data,
             invoice_number=form.invoice_number.data,
             payment_method=form.payment_method.data or None,
+            tax_exempt_status=form.tax_exempt_status.data or None,
             budget_line_item_id=form.budget_line_item_id.data,
             custom_account_code=form.custom_account_code.data if is_other else None,
             custom_account_description=form.custom_account_description.data if is_other else None,
@@ -291,6 +292,7 @@ def edit(dept_id, id):
         purchase.po_number = form.po_number.data
         purchase.invoice_number = form.invoice_number.data
         purchase.payment_method = form.payment_method.data or None
+        purchase.tax_exempt_status = form.tax_exempt_status.data or None
         purchase.budget_line_item_id = form.budget_line_item_id.data
         purchase.custom_account_code = form.custom_account_code.data if is_other else None
         purchase.custom_account_description = form.custom_account_description.data if is_other else None
@@ -376,8 +378,8 @@ def export_csv(dept_id):
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "ID", "Vendor", "Date", "Amount", "Status", "Payment Method", "Line Item",
-        "Custom Code", "Description", "PO #", "Invoice #",
+        "ID", "Vendor", "Date", "Amount", "Status", "Payment Method", "Tax Exempt Status",
+        "Line Item", "Custom Code", "Description", "PO #", "Invoice #",
         "Submitted By", "Fiscal Year", "Created At",
     ])
 
@@ -389,6 +391,7 @@ def export_csv(dept_id):
             str(p.amount),
             p.status,
             p.payment_method or "",
+            dict(Purchase.TAX_EXEMPT_CHOICES).get(p.tax_exempt_status, "") if p.tax_exempt_status else "",
             p.line_item.display_label if p.line_item else "",
             p.custom_account_code or "",
             p.description or "",
