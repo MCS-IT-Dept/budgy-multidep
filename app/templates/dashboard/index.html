@@ -69,6 +69,42 @@
     </div>
 </div>
 
+<!-- Tax Reimbursement Alert -->
+{% if tax_reimbursement_purchases %}
+<div class="card mb-4 border-danger">
+    <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-triangle-fill"></i> Tax Reimbursement Required ({{ tax_reimbursement_purchases|length }})</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Date</th>
+                    <th>Vendor</th>
+                    <th class="text-end">Amount</th>
+                    <th>Status</th>
+                    <th>Submitted By</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in tax_reimbursement_purchases %}
+                <tr>
+                    <td>{{ p.purchase_date.strftime('%m/%d/%Y') }}</td>
+                    <td><a href="{{ url_for('purchases.detail', dept_id=department.id, id=p.id) }}">{{ p.vendor_name }}</a></td>
+                    <td class="text-end">${{ "{:,.2f}".format(p.amount) }}</td>
+                    <td>
+                        {% set badge = {"submitted": "warning", "reviewed": "info", "approved": "success", "rejected": "danger"} %}
+                        <span class="badge bg-{{ badge.get(p.status, 'secondary') }}">{{ p.status }}</span>
+                    </td>
+                    <td>{{ p.submitter.display_name if p.submitter else 'N/A' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 <!-- Line Item Breakdown -->
 <div class="card mb-4">
     <div class="card-header">

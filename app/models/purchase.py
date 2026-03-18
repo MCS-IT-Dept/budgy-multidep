@@ -7,6 +7,13 @@ class Purchase(db.Model):
 
     STATUSES = ["submitted", "reviewed", "approved", "rejected"]
 
+    TAX_EXEMPT_CHOICES = [
+        ("", "— Select —"),
+        ("exempt", "Tax Exemption Applied"),
+        ("not_eligible", "Not Eligible for Tax Exemption (Explain in Notes)"),
+        ("reimbursement_required", "Tax Charged -- Reimbursement Required"),
+    ]
+
     id = db.Column(db.Integer, primary_key=True)
     vendor_name = db.Column(db.String(255), nullable=False, index=True)
     purchase_date = db.Column(db.Date, nullable=False)
@@ -16,6 +23,7 @@ class Purchase(db.Model):
     po_number = db.Column(db.String(100), nullable=True)
     invoice_number = db.Column(db.String(100), nullable=True)
     payment_method = db.Column(db.String(50), nullable=True)
+    tax_exempt_status = db.Column(db.String(30), nullable=True)
 
     department_id = db.Column(
         db.Integer, db.ForeignKey("departments.id"), nullable=False, index=True
