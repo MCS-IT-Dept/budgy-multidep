@@ -11,6 +11,16 @@
                     <i class="bi bi-pencil"></i> Edit
                 </a>
                 {% endif %}
+                {% if current_user.is_global_admin %}
+                <form method="POST" action="{{ url_for('purchases.delete', dept_id=department.id, id=purchase.id) }}"
+                      class="d-inline"
+                      onsubmit="return confirm('Permanently delete this purchase? This cannot be undone. The deletion will be recorded in the audit log.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-outline-danger btn-sm">
+                        <i class="bi bi-trash"></i> Delete
+                    </button>
+                </form>
+                {% endif %}
                 <a href="{{ url_for('purchases.index', dept_id=department.id) }}" class="btn btn-outline-secondary btn-sm">Back to List</a>
             </div>
         </div>

@@ -28,7 +28,7 @@ from app.services.storage import get_storage_backend, generate_object_key, allow
 from app.services.activity import log_activity
 from app.models.approval_threshold import ApprovalThreshold
 from app.utils.forms import PurchaseForm, PurchaseStatusForm
-from app.utils.decorators import dept_admin_required, department_access_required
+from app.utils.decorators import global_admin_required, dept_admin_required, department_access_required
 
 purchases_bp = Blueprint(
     "purchases", __name__, template_folder="../templates/purchases"
@@ -424,6 +424,50 @@ def export_csv(dept_id):
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename={department.slug}_purchases_export.csv"},
     )
+
+
+@purchases_bp.route("/dept/<int:dept_id>/<int:id>/delete", methods=["POST"])
+@login_required
+@department_access_required
+@global_admin_required
+def delete(dept_id, id):
+    department = g.department
+    purchase = Purchase.query.get_or_404(id)
+
+    if purchase.department_id != department.id:
+        abort(404)
+
+    # Capture details for the audit log before deleting
+    details = (
+        f"Deleted purchase #{purchase.id}: "
+        f"Vendor={purchase.vendor_name}, "
+        f"Amount=${purchase.amount:,.2f}, "
+        f"Date={purchase.purchase_date.isoformat()}, "
+        f"Status={purchase.status}, "
+        f"LineItem={purchase.line_item.display_label if purchase.line_item else 'N/A'}, "
+        f"FY={purchase.fiscal_year.label if purchase.fiscal_year else 'N/A'}, "
+        f"SubmittedBy={purchase.submitter.display_name if purchase.submitter else 'N/A'}"
+    )
+
+    # Delete associated documents from storage
+    storage = get_storage_backend()
+    for doc in purchase.documents.all():
+        try:
+            storage.delete(doc.object_key)
+        except Exception:
+            pass
+        db.session.delete(doc)
+
+    db.session.delete(purchase)
+    db.session.commit()
+
+    log_activity(
+        current_user.id, "purchase_deleted", "purchase", id,
+        details=details,
+        department_id=department.id,
+    )
+    flash("Purchase deleted.", "success")
+    return redirect(url_for("purchases.index", dept_id=department.id))
 
 
 @purchases_bp.route("/dept/<int:dept_id>/vendors.json")
