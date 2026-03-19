@@ -21,6 +21,23 @@
                         {{ form.allocated_amount(class="form-control", step="0.01", min="0") }}
                         {% for e in form.allocated_amount.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                     </div>
+                    {% if edit and amendment_form %}
+                    <hr>
+                    <h6><i class="bi bi-journal-text"></i> Record Amendment (optional)</h6>
+                    <p class="text-muted small">If this change was board-approved, fill in the fields below to create an audit trail.</p>
+                    <div class="mb-3">
+                        <label class="form-label">{{ amendment_form.board_approval_date.label.text }}</label>
+                        {{ amendment_form.board_approval_date(class="form-control", type="date") }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ amendment_form.approved_by_name.label.text }}</label>
+                        {{ amendment_form.approved_by_name(class="form-control", placeholder="e.g. School Board") }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">{{ amendment_form.description.label.text }}</label>
+                        {{ amendment_form.description(class="form-control", rows="2", placeholder="e.g. Board approved +$5,000 on 11/15/2025") }}
+                    </div>
+                    {% endif %}
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">Save</button>
                         <a href="{{ url_for('admin.allocations', dept_id=department.id) }}" class="btn btn-outline-secondary">Cancel</a>

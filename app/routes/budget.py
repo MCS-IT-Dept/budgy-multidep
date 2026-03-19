@@ -6,6 +6,9 @@ from flask import Blueprint, render_template, request, Response, g
 from flask_login import login_required
 
 from app.models.fiscal_year import FiscalYear
+from app.models.budget_amendment import BudgetAmendment
+from app.models.budget_allocation import BudgetAllocation
+from app.models.budget_line_item import BudgetLineItem
 from app.services.budget import get_budget_summary, get_budget_totals
 from app.services.fiscal_year import get_or_create_fiscal_year, get_all_fiscal_years
 from app.utils.decorators import dept_admin_required, department_access_required
@@ -33,6 +36,18 @@ def index(dept_id):
     summary = get_budget_summary(fiscal_year.id, department_id=department.id)
     totals = get_budget_totals(summary)
 
+    amendments = (
+        BudgetAmendment.query
+        .join(BudgetAllocation)
+        .join(BudgetLineItem)
+        .filter(
+            BudgetAllocation.fiscal_year_id == fiscal_year.id,
+            BudgetLineItem.department_id == department.id,
+        )
+        .order_by(BudgetAmendment.created_at.desc())
+        .all()
+    )
+
     return render_template(
         "budget/index.html",
         fiscal_year=fiscal_year,
@@ -40,6 +55,7 @@ def index(dept_id):
         summary=summary,
         totals=totals,
         department=department,
+        amendments=amendments,
     )
 
 

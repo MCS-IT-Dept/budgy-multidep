@@ -29,6 +29,7 @@ from app.models.document import Document
 from app.models.activity_log import ActivityLog
 from app.models.organization_settings import OrganizationSettings
 from app.models.approval_threshold import ApprovalThreshold
+from app.models.budget_amendment import BudgetAmendment
 from app.services.activity import log_activity
 from app.services.storage import get_storage_backend
 from app.services.department import get_all_departments
@@ -42,6 +43,7 @@ from app.utils.forms import (
     DepartmentForm,
     PaymentMethodForm,
     ApprovalThresholdForm,
+    BudgetAmendmentForm,
     BrandingForm,
 )
 
@@ -578,10 +580,29 @@ def allocation_edit(dept_id, id):
         ).order_by(BudgetLineItem.code).all()
     ]
 
+    amendment_form = BudgetAmendmentForm(prefix="amendment")
+
     if form.validate_on_submit():
+        old_amount = alloc.allocated_amount
         alloc.fiscal_year_id = form.fiscal_year_id.data
         alloc.budget_line_item_id = form.budget_line_item_id.data
         alloc.allocated_amount = form.allocated_amount.data
+
+        # Auto-record amendment if amount changed and amendment details provided
+        if old_amount != form.allocated_amount.data and amendment_form.description.data:
+            change = form.allocated_amount.data - old_amount
+            amendment = BudgetAmendment(
+                budget_allocation_id=alloc.id,
+                previous_amount=old_amount,
+                new_amount=form.allocated_amount.data,
+                change_amount=change,
+                board_approval_date=amendment_form.board_approval_date.data,
+                description=amendment_form.description.data,
+                approved_by_name=amendment_form.approved_by_name.data or None,
+                created_by_user_id=current_user.id,
+            )
+            db.session.add(amendment)
+
         db.session.commit()
         log_activity(
             current_user.id, "allocation_updated", "budget_allocation", alloc.id,
@@ -590,7 +611,10 @@ def allocation_edit(dept_id, id):
         flash("Budget allocation updated.", "success")
         return redirect(url_for("admin.allocations", dept_id=department.id))
 
-    return render_template("admin/allocation_form.html", form=form, edit=True, alloc=alloc, department=department)
+    return render_template(
+        "admin/allocation_form.html", form=form, edit=True, alloc=alloc,
+        department=department, amendment_form=amendment_form,
+    )
 
 
 # ── Allocation CSV Import (department-scoped) ─────────────────
@@ -653,6 +677,104 @@ def allocation_import(dept_id):
 
     fiscal_years = FiscalYear.query.order_by(FiscalYear.start_date.desc()).all()
     return render_template("admin/allocation_import.html", fiscal_years=fiscal_years, department=department)
+
+
+# ── Budget Amendments (department-scoped) ──────────────────
+@admin_bp.route("/dept/<int:dept_id>/amendments")
+@login_required
+@department_access_required
+@dept_admin_required
+def amendments(dept_id):
+    department = g.department
+    fy_id = request.args.get("fy", type=int)
+
+    query = (
+        BudgetAmendment.query
+        .join(BudgetAllocation)
+        .join(BudgetLineItem)
+        .filter(BudgetLineItem.department_id == department.id)
+    )
+
+    if fy_id:
+        query = query.filter(BudgetAllocation.fiscal_year_id == fy_id)
+
+    amendments = (
+        query.join(FiscalYear, BudgetAllocation.fiscal_year_id == FiscalYear.id)
+        .order_by(BudgetAmendment.created_at.desc())
+        .all()
+    )
+    fiscal_years = FiscalYear.query.order_by(FiscalYear.start_date.desc()).all()
+    return render_template(
+        "admin/amendments.html",
+        amendments=amendments,
+        fiscal_years=fiscal_years,
+        department=department,
+    )
+
+
+@admin_bp.route("/dept/<int:dept_id>/allocations/<int:alloc_id>/amendments/new", methods=["GET", "POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def amendment_create(dept_id, alloc_id):
+    department = g.department
+    alloc = BudgetAllocation.query.get_or_404(alloc_id)
+    if alloc.line_item.department_id != department.id:
+        abort(404)
+
+    form = BudgetAmendmentForm()
+
+    if form.validate_on_submit():
+        change = form.change_amount.data
+        new_amount = alloc.allocated_amount + change
+
+        amendment = BudgetAmendment(
+            budget_allocation_id=alloc.id,
+            previous_amount=alloc.allocated_amount,
+            new_amount=new_amount,
+            change_amount=change,
+            board_approval_date=form.board_approval_date.data,
+            description=form.description.data,
+            approved_by_name=form.approved_by_name.data or None,
+            created_by_user_id=current_user.id,
+        )
+        alloc.allocated_amount = new_amount
+        db.session.add(amendment)
+        db.session.commit()
+        log_activity(
+            current_user.id, "budget_amendment_created", "budget_amendment", amendment.id,
+            department_id=department.id,
+            details=f"{amendment.change_display} on {alloc.line_item.display_label}",
+        )
+        flash(f"Budget amendment recorded ({amendment.change_display}).", "success")
+        return redirect(url_for("admin.amendments", dept_id=department.id))
+
+    return render_template(
+        "admin/amendment_form.html", form=form, alloc=alloc, department=department,
+    )
+
+
+@admin_bp.route("/dept/<int:dept_id>/amendments/<int:id>/delete", methods=["POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def amendment_delete(dept_id, id):
+    department = g.department
+    amendment = BudgetAmendment.query.get_or_404(id)
+    alloc = amendment.allocation
+    if alloc.line_item.department_id != department.id:
+        abort(404)
+
+    # Revert the allocation amount
+    alloc.allocated_amount = alloc.allocated_amount - amendment.change_amount
+    db.session.delete(amendment)
+    db.session.commit()
+    log_activity(
+        current_user.id, "budget_amendment_deleted", "budget_amendment", id,
+        department_id=department.id,
+    )
+    flash("Amendment deleted and allocation reverted.", "success")
+    return redirect(url_for("admin.amendments", dept_id=department.id))
 
 
 # ── Purchases Admin (department-scoped) ───────────────────────

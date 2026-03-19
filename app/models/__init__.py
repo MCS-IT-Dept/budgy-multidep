@@ -8,6 +8,7 @@ from app.models.purchase import Purchase
 from app.models.document import Document
 from app.models.activity_log import ActivityLog
 from app.models.organization_settings import OrganizationSettings
+from app.models.budget_amendment import BudgetAmendment
 
 __all__ = [
     "Department",
@@ -16,6 +17,7 @@ __all__ = [
     "BudgetLineItem",
     "FiscalYear",
     "BudgetAllocation",
+    "BudgetAmendment",
     "Purchase",
     "Document",
     "ActivityLog",
