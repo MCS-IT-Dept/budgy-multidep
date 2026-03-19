@@ -426,6 +426,30 @@ def export_csv(dept_id):
     )
 
 
+@purchases_bp.route("/dept/<int:dept_id>/<int:id>/toggle-finance", methods=["POST"])
+@login_required
+@department_access_required
+@dept_admin_required
+def toggle_finance(dept_id, id):
+    department = g.department
+    purchase = Purchase.query.get_or_404(id)
+
+    if purchase.department_id != department.id:
+        abort(404)
+
+    purchase.submitted_to_finance = not purchase.submitted_to_finance
+    db.session.commit()
+
+    status_label = "submitted to" if purchase.submitted_to_finance else "unmarked from"
+    log_activity(
+        current_user.id, "purchase_finance_flag", "purchase", purchase.id,
+        f"Purchase {status_label} finance",
+        department_id=department.id,
+    )
+    flash(f"Purchase marked as {'submitted to' if purchase.submitted_to_finance else 'not submitted to'} finance.", "success")
+    return redirect(url_for("purchases.detail", dept_id=department.id, id=purchase.id))
+
+
 @purchases_bp.route("/dept/<int:dept_id>/<int:id>/delete", methods=["POST"])
 @login_required
 @department_access_required

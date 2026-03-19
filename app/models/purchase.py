@@ -47,6 +47,7 @@ class Purchase(db.Model):
         db.Integer, db.ForeignKey("users.id"), nullable=True
     )
     approval_flag = db.Column(db.String(255), nullable=True)  # e.g. "Requires Director sign-off"
+    submitted_to_finance = db.Column(db.Boolean, nullable=False, default=False)
 
     created_at = db.Column(
         db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
