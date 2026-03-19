@@ -95,7 +95,43 @@
                     {% endif %}
                 </ul>
                 <ul class="navbar-nav">
-                    {% if current_user.department %}
+                    {% if current_user.is_global_admin and all_departments %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-building"></i> Departments
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            {% for dept in all_departments %}
+                            <li>
+                                <h6 class="dropdown-header">{{ dept.name }}</h6>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('dashboard.dept_dashboard', dept_id=dept.id) }}">
+                                    <i class="bi bi-speedometer2"></i> Dashboard
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('purchases.index', dept_id=dept.id) }}">
+                                    <i class="bi bi-receipt"></i> Purchases
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('budget.index', dept_id=dept.id) }}">
+                                    <i class="bi bi-piggy-bank"></i> Budget
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('reports.dept_report', dept_id=dept.id) }}">
+                                    <i class="bi bi-bar-chart-line"></i> Reports
+                                </a>
+                            </li>
+                            {% if not loop.last %}
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </li>
+                    {% elif current_user.department %}
                     <li class="nav-item">
                         <span class="nav-link text-light opacity-75">
                             <i class="bi bi-building"></i> {{ current_user.department.name }}
