@@ -27,7 +27,10 @@ class User(UserMixin, db.Model):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
-    purchases = db.relationship("Purchase", backref="submitter", lazy="dynamic")
+    purchases = db.relationship(
+        "Purchase", foreign_keys="[Purchase.submitted_by_user_id]",
+        backref="submitter", lazy="dynamic"
+    )
     documents = db.relationship("Document", backref="uploader", lazy="dynamic")
 
     @property
