@@ -201,5 +201,17 @@ def logout():
         log_activity(current_user.id, "user_logout", "user", current_user.id)
     logout_user()
     session.clear()
+
+    # If Azure AD is configured, redirect to its logout endpoint so the
+    # SSO session is also terminated; otherwise the user gets silently
+    # re-authenticated on the next request.
+    if current_app.config.get("AZURE_CLIENT_ID"):
+        post_logout_url = url_for("auth.login", _external=True)
+        authority = current_app.config["AZURE_AUTHORITY"]
+        return redirect(
+            f"{authority}/oauth2/v2.0/logout"
+            f"?post_logout_redirect_uri={post_logout_url}"
+        )
+
     flash("You have been logged out.", "info")
     return redirect(url_for("auth.login"))
