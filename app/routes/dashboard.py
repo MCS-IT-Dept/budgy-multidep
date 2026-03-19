@@ -62,6 +62,14 @@ def global_overview():
         .all()
     )
 
+    not_submitted_to_finance = (
+        Purchase.query
+        .filter_by(submitted_to_finance=False)
+        .filter(Purchase.status != "rejected")
+        .order_by(Purchase.created_at.desc())
+        .all()
+    )
+
     return render_template(
         "dashboard/global_overview.html",
         fiscal_year=fiscal_year,
@@ -70,6 +78,7 @@ def global_overview():
         overall=overall,
         recent_purchases=recent_purchases,
         tax_reimbursement_purchases=tax_reimbursement_purchases,
+        not_submitted_to_finance=not_submitted_to_finance,
     )
 
 
@@ -111,6 +120,14 @@ def dept_dashboard(dept_id):
         .all()
     )
 
+    not_submitted_to_finance = (
+        Purchase.query
+        .filter_by(department_id=department.id, submitted_to_finance=False)
+        .filter(Purchase.status != "rejected")
+        .order_by(Purchase.created_at.desc())
+        .all()
+    )
+
     return render_template(
         "dashboard/index.html",
         fiscal_year=fiscal_year,
@@ -119,5 +136,6 @@ def dept_dashboard(dept_id):
         totals=totals,
         recent_purchases=recent_purchases,
         tax_reimbursement_purchases=tax_reimbursement_purchases,
+        not_submitted_to_finance=not_submitted_to_finance,
         department=department,
     )

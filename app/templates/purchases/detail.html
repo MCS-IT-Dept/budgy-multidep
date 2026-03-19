@@ -116,7 +116,7 @@
             <!-- Status Update (dept_admin/director/global_admin) -->
             <div class="col-md-4">
                 {% if current_user.is_manager %}
-                <div class="card">
+                <div class="card mb-3">
                     <div class="card-header"><h5 class="mb-0">Update Status</h5></div>
                     <div class="card-body">
                         <form method="POST" action="{{ url_for('purchases.update_status', dept_id=department.id, id=purchase.id) }}">
@@ -130,6 +130,33 @@
                                 {{ status_form.review_notes(class="form-control", rows=3) }}
                             </div>
                             <button type="submit" class="btn btn-primary w-100">Update Status</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Finance Submission -->
+                <div class="card">
+                    <div class="card-header"><h5 class="mb-0">Finance Submission</h5></div>
+                    <div class="card-body">
+                        <form method="POST" action="{{ url_for('purchases.toggle_finance', dept_id=department.id, id=purchase.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="financeToggle"
+                                       {% if purchase.submitted_to_finance %}checked{% endif %}
+                                       onchange="this.form.submit()">
+                                <label class="form-check-label" for="financeToggle">
+                                    Submitted to Finance Dept.
+                                </label>
+                            </div>
+                            {% if not purchase.submitted_to_finance %}
+                            <small class="text-warning d-block mt-2">
+                                <i class="bi bi-exclamation-triangle"></i> Not yet submitted to finance
+                            </small>
+                            {% else %}
+                            <small class="text-success d-block mt-2">
+                                <i class="bi bi-check-circle"></i> Submitted to finance
+                            </small>
+                            {% endif %}
                         </form>
                     </div>
                 </div>
