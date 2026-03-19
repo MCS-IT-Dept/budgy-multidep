@@ -1,4 +1,4 @@
-"""Add approval_thresholds table
+"""Add approval_thresholds table and purchase approval tracking columns
 
 Revision ID: 006
 Revises: 005
@@ -26,6 +26,13 @@ def upgrade():
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
 
+    with op.batch_alter_table("purchases") as batch_op:
+        batch_op.add_column(sa.Column("approved_by_user_id", sa.Integer(), sa.ForeignKey("users.id"), nullable=True))
+        batch_op.add_column(sa.Column("approval_flag", sa.String(255), nullable=True))
+
 
 def downgrade():
+    with op.batch_alter_table("purchases") as batch_op:
+        batch_op.drop_column("approval_flag")
+        batch_op.drop_column("approved_by_user_id")
     op.drop_table("approval_thresholds")

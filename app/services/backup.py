@@ -143,6 +143,8 @@ def export_backup():
             "submitted_by_user_id": p.submitted_by_user_id,
             "status": p.status,
             "review_notes": p.review_notes,
+            "approved_by_user_id": p.approved_by_user_id,
+            "approval_flag": p.approval_flag,
             "created_at": p.created_at,
             "updated_at": p.updated_at,
         })
@@ -399,6 +401,8 @@ def import_backup(data):
                 submitted_by_user_id=new_user_id,
                 status=row.get("status", "submitted"),
                 review_notes=row.get("review_notes"),
+                approved_by_user_id=user_map.get(row.get("approved_by_user_id")),
+                approval_flag=row.get("approval_flag"),
             )
             db.session.add(p)
             db.session.flush()

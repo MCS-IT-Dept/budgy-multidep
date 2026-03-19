@@ -43,6 +43,10 @@ class Purchase(db.Model):
 
     status = db.Column(db.String(20), nullable=False, default="submitted", index=True)
     review_notes = db.Column(db.Text, nullable=True)
+    approved_by_user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id"), nullable=True
+    )
+    approval_flag = db.Column(db.String(255), nullable=True)  # e.g. "Requires Director sign-off"
 
     created_at = db.Column(
         db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
@@ -53,6 +57,9 @@ class Purchase(db.Model):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
+    approved_by = db.relationship(
+        "User", foreign_keys=[approved_by_user_id], backref="approved_purchases"
+    )
     documents = db.relationship(
         "Document", backref="purchase", lazy="dynamic", cascade="all, delete-orphan"
     )
