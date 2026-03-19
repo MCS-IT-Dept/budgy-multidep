@@ -61,8 +61,14 @@
                                 <td>
                                     {% set badge = {"submitted": "warning", "reviewed": "info", "approved": "success", "rejected": "danger"} %}
                                     <span class="badge bg-{{ badge.get(purchase.status, 'secondary') }} fs-6">{{ purchase.status|title }}</span>
+                                    {% if purchase.approval_flag %}
+                                    <span class="badge bg-warning text-dark ms-1"><i class="bi bi-exclamation-triangle"></i> {{ purchase.approval_flag }}</span>
+                                    {% endif %}
                                 </td>
                             </tr>
+                            {% if purchase.approved_by %}
+                            <tr><th>Approved By</th><td>{{ purchase.approved_by.display_name }}</td></tr>
+                            {% endif %}
                             {% if purchase.review_notes %}
                             <tr><th>Review Notes</th><td>{{ purchase.review_notes }}</td></tr>
                             {% endif %}
@@ -100,21 +106,6 @@
             <!-- Status Update (dept_admin/director/global_admin) -->
             <div class="col-md-4">
                 {% if current_user.is_manager %}
-                {% if has_thresholds %}
-                <div class="card mb-3">
-                    <div class="card-body py-2">
-                        <small class="text-muted">
-                            <i class="bi bi-shield-check"></i> Approval required by:
-                            <strong>{{ required_approval_role }}</strong>
-                        </small>
-                        {% if not can_approve and purchase.status != 'approved' %}
-                        <div class="text-danger small mt-1">
-                            <i class="bi bi-exclamation-triangle"></i> Your role cannot approve this amount.
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endif %}
                 <div class="card">
                     <div class="card-header"><h5 class="mb-0">Update Status</h5></div>
                     <div class="card-body">

@@ -104,6 +104,9 @@
                 <td>
                     {% set badge = {"submitted": "warning", "reviewed": "info", "approved": "success", "rejected": "danger"} %}
                     <span class="badge bg-{{ badge.get(p.status, 'secondary') }}">{{ p.status }}</span>
+                    {% if p.approval_flag %}
+                    <span class="badge bg-warning text-dark" title="{{ p.approval_flag }}"><i class="bi bi-exclamation-triangle"></i></span>
+                    {% endif %}
                 </td>
                 <td>{{ p.submitter.display_name if p.submitter else 'N/A' }}</td>
                 <td>{{ p.fiscal_year.label if p.fiscal_year else '' }}</td>
