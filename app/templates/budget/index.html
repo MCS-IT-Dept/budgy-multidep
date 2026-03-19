@@ -11,6 +11,9 @@
                 {% endfor %}
             </select>
         </form>
+        <a href="{{ url_for('reports.dept_fy_comparison', dept_id=department.id) }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-arrow-left-right"></i> FY Comparison
+        </a>
         <a href="{{ url_for('budget.export_csv', dept_id=department.id, fy=fiscal_year.id) }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-download"></i> Export CSV
         </a>
