@@ -90,6 +90,7 @@ def create_app(config_name=None):
             ctx["org_name"] = org.organization_name
             ctx["org_has_logo"] = bool(org.logo_object_key)
         except Exception:
+            db.session.rollback()
             ctx["org_name"] = None
             ctx["org_has_logo"] = False
 
