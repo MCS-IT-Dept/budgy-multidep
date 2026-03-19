@@ -113,6 +113,87 @@ def get_budget_totals(summary: list[dict]) -> dict:
     }
 
 
+def get_fy_comparison(department_id: int, fiscal_year_ids: list[int]) -> dict:
+    """Build a side-by-side comparison of budget line items across fiscal years.
+
+    Returns {
+        "fiscal_years": [FiscalYear, ...],
+        "rows": [
+            {
+                "line_item": BudgetLineItem,
+                "years": {
+                    fy_id: {"allocated": D, "spent": D, "remaining": D, "pct_used": D, "purchase_count": int},
+                    ...
+                }
+            },
+            ...
+        ],
+        "totals": {
+            fy_id: {"allocated": D, "spent": D, "remaining": D, "pct_used": D},
+            ...
+        }
+    }
+    """
+    fiscal_years = (
+        FiscalYear.query
+        .filter(FiscalYear.id.in_(fiscal_year_ids))
+        .order_by(FiscalYear.start_date)
+        .all()
+    )
+
+    # Gather summaries per FY
+    fy_summaries = {}
+    for fy in fiscal_years:
+        fy_summaries[fy.id] = {
+            "summary": get_budget_summary(fy.id, department_id=department_id),
+            "totals": None,
+        }
+        fy_summaries[fy.id]["totals"] = get_budget_totals(fy_summaries[fy.id]["summary"])
+
+    # Collect all unique line items across FYs (by id)
+    line_items_map = {}
+    for fy_id, data in fy_summaries.items():
+        for s in data["summary"]:
+            li = s["line_item"]
+            if li.id not in line_items_map:
+                line_items_map[li.id] = li
+
+    # Build rows
+    rows = []
+    for li_id, li in sorted(line_items_map.items(), key=lambda x: x[1].code):
+        years = {}
+        for fy in fiscal_years:
+            match = next(
+                (s for s in fy_summaries[fy.id]["summary"] if s["line_item"].id == li_id),
+                None,
+            )
+            if match:
+                years[fy.id] = {
+                    "allocated": match["allocated"],
+                    "spent": match["spent"],
+                    "remaining": match["remaining"],
+                    "pct_used": match["pct_used"],
+                    "purchase_count": match["purchase_count"],
+                }
+            else:
+                years[fy.id] = {
+                    "allocated": Decimal("0"),
+                    "spent": Decimal("0"),
+                    "remaining": Decimal("0"),
+                    "pct_used": Decimal("0"),
+                    "purchase_count": 0,
+                }
+        rows.append({"line_item": li, "years": years})
+
+    totals = {fy.id: fy_summaries[fy.id]["totals"] for fy in fiscal_years}
+
+    return {
+        "fiscal_years": fiscal_years,
+        "rows": rows,
+        "totals": totals,
+    }
+
+
 def get_cross_department_summary(fiscal_year_id: int) -> list[dict]:
     """Get a per-department budget roll-up for the global admin overview."""
     from app.models.department import Department

@@ -1,0 +1,146 @@
+{% extends "layouts/base.html" %}
+{% block title %}FY Comparison - {{ department.name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2><i class="bi bi-arrow-left-right"></i> Fiscal Year Comparison — {{ department.name }}</h2>
+    <div class="d-flex gap-2">
+        {% if comparison %}
+        <a href="{{ url_for('reports.dept_fy_comparison_export', dept_id=department.id, **request.args) }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-filetype-csv"></i> Export CSV
+        </a>
+        {% endif %}
+        <a href="{{ url_for('reports.dept_report', dept_id=department.id) }}" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Reports
+        </a>
+    </div>
+</div>
+
+<!-- FY Selector -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="GET" class="row g-2 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label form-label-sm">Select Fiscal Years to Compare (pick 2 or more)</label>
+                <div class="d-flex flex-wrap gap-2">
+                    {% for fy in all_fiscal_years %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="fy" value="{{ fy.id }}" id="fy_{{ fy.id }}"
+                            {% if fy.id in selected_fy_ids %}checked{% endif %}>
+                        <label class="form-check-label" for="fy_{{ fy.id }}">{{ fy.label }}</label>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary btn-sm">Compare</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if comparison %}
+<!-- Totals Summary Cards -->
+<div class="row mb-4">
+    {% for fy in comparison.fiscal_years %}
+    {% set t = comparison.totals[fy.id] %}
+    <div class="col">
+        <div class="card text-center">
+            <div class="card-header"><strong>FY {{ fy.label }}</strong></div>
+            <div class="card-body p-2">
+                <div class="row text-center">
+                    <div class="col">
+                        <small class="text-muted d-block">Allocated</small>
+                        <strong class="text-primary">${{ "{:,.0f}".format(t.total_allocated) }}</strong>
+                    </div>
+                    <div class="col">
+                        <small class="text-muted d-block">Spent</small>
+                        <strong class="text-success">${{ "{:,.0f}".format(t.total_spent) }}</strong>
+                    </div>
+                    <div class="col">
+                        <small class="text-muted d-block">Remaining</small>
+                        <strong class="{% if t.total_remaining < 0 %}text-danger{% else %}text-info{% endif %}">${{ "{:,.0f}".format(t.total_remaining) }}</strong>
+                    </div>
+                    <div class="col">
+                        <small class="text-muted d-block">% Used</small>
+                        <strong>{{ t.pct_used }}%</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Comparison Table -->
+<div class="card">
+    <div class="card-header"><h5 class="mb-0">Line Item Comparison</h5></div>
+    <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+            <thead>
+                <tr class="table-dark">
+                    <th rowspan="2" class="align-middle">Code</th>
+                    <th rowspan="2" class="align-middle">Line Item</th>
+                    {% for fy in comparison.fiscal_years %}
+                    <th colspan="4" class="text-center border-start">FY {{ fy.label }}</th>
+                    {% endfor %}
+                </tr>
+                <tr class="table-light">
+                    {% for fy in comparison.fiscal_years %}
+                    <th class="text-end border-start">Allocated</th>
+                    <th class="text-end">Spent</th>
+                    <th class="text-end">Remaining</th>
+                    <th class="text-end">% Used</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in comparison.rows %}
+                <tr>
+                    <td><strong>{{ row.line_item.code }}</strong></td>
+                    <td>{{ row.line_item.name }}</td>
+                    {% for fy in comparison.fiscal_years %}
+                    {% set y = row.years[fy.id] %}
+                    <td class="text-end border-start">${{ "{:,.2f}".format(y.allocated) }}</td>
+                    <td class="text-end">${{ "{:,.2f}".format(y.spent) }}</td>
+                    <td class="text-end {% if y.remaining < 0 %}text-danger fw-bold{% endif %}">${{ "{:,.2f}".format(y.remaining) }}</td>
+                    <td class="text-end">
+                        {% if y.allocated > 0 %}
+                        <span class="{% if y.pct_used|float >= 100 %}text-danger fw-bold{% elif y.pct_used|float >= 85 %}text-warning{% endif %}">
+                            {{ y.pct_used }}%
+                        </span>
+                        {% else %}—{% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                {% if not comparison.rows %}
+                <tr><td colspan="{{ 2 + comparison.fiscal_years|length * 4 }}" class="text-center text-muted py-4">No allocations found for the selected fiscal years.</td></tr>
+                {% endif %}
+            </tbody>
+            {% if comparison.rows %}
+            <tfoot class="table-dark">
+                <tr>
+                    <th colspan="2">Totals</th>
+                    {% for fy in comparison.fiscal_years %}
+                    {% set t = comparison.totals[fy.id] %}
+                    <th class="text-end border-start">${{ "{:,.2f}".format(t.total_allocated) }}</th>
+                    <th class="text-end">${{ "{:,.2f}".format(t.total_spent) }}</th>
+                    <th class="text-end">${{ "{:,.2f}".format(t.total_remaining) }}</th>
+                    <th class="text-end">{{ t.pct_used }}%</th>
+                    {% endfor %}
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+
+{% elif selected_fy_ids|length == 1 %}
+<div class="alert alert-warning">Please select at least 2 fiscal years to compare.</div>
+{% elif selected_fy_ids|length == 0 %}
+<div class="text-center text-muted py-5">
+    <i class="bi bi-arrow-left-right" style="font-size: 3rem;"></i>
+    <p class="mt-2">Select two or more fiscal years above and click <strong>Compare</strong> to see a side-by-side budget comparison.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -16,10 +16,12 @@ from sqlalchemy import func
 from app import db
 from app.models.purchase import Purchase
 from app.models.budget_line_item import BudgetLineItem
+from app.models.budget_allocation import BudgetAllocation
 from app.models.fiscal_year import FiscalYear
 from app.models.department import Department
 from app.utils.decorators import dept_admin_required, global_admin_required, department_access_required
 from app.services.report_pdf import generate_dept_report_pdf, generate_global_report_pdf
+from app.services.budget import get_fy_comparison
 
 reports_bp = Blueprint(
     "reports", __name__, template_folder="../templates/reports"
@@ -472,4 +474,157 @@ def global_report_pdf():
         pdf_bytes,
         mimetype="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=global_report{date_suffix}.pdf"},
+    )
+
+
+# ── Fiscal Year Comparison ─────────────────────────────────
+
+def _get_comparison_fy_ids():
+    """Extract selected fiscal year IDs from request args."""
+    return request.args.getlist("fy", type=int)
+
+
+@reports_bp.route("/dept/<int:dept_id>/fy-comparison")
+@login_required
+@department_access_required
+@dept_admin_required
+def dept_fy_comparison(dept_id):
+    """Side-by-side fiscal year comparison for a department."""
+    department = g.department
+    all_fys = FiscalYear.query.order_by(FiscalYear.start_date.desc()).all()
+    selected_fy_ids = _get_comparison_fy_ids()
+
+    comparison = None
+    if len(selected_fy_ids) >= 2:
+        comparison = get_fy_comparison(department.id, selected_fy_ids)
+
+    return render_template(
+        "reports/fy_comparison.html",
+        department=department,
+        all_fiscal_years=all_fys,
+        selected_fy_ids=selected_fy_ids,
+        comparison=comparison,
+    )
+
+
+@reports_bp.route("/dept/<int:dept_id>/fy-comparison/export")
+@login_required
+@department_access_required
+@dept_admin_required
+def dept_fy_comparison_export(dept_id):
+    """Export fiscal year comparison as CSV."""
+    department = g.department
+    selected_fy_ids = _get_comparison_fy_ids()
+
+    if len(selected_fy_ids) < 2:
+        return redirect(url_for("reports.dept_fy_comparison", dept_id=department.id))
+
+    comparison = get_fy_comparison(department.id, selected_fy_ids)
+    fys = comparison["fiscal_years"]
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Header row
+    header = ["Line Item Code", "Line Item Name"]
+    for fy in fys:
+        header.extend([f"Allocated ({fy.label})", f"Spent ({fy.label})", f"Remaining ({fy.label})", f"% Used ({fy.label})"])
+    writer.writerow(header)
+
+    # Data rows
+    for row in comparison["rows"]:
+        csv_row = [row["line_item"].code, row["line_item"].name]
+        for fy in fys:
+            y = row["years"][fy.id]
+            csv_row.extend([str(y["allocated"]), str(y["spent"]), str(y["remaining"]), str(y["pct_used"])])
+        writer.writerow(csv_row)
+
+    # Totals
+    totals_row = ["TOTALS", ""]
+    for fy in fys:
+        t = comparison["totals"][fy.id]
+        totals_row.extend([str(t["total_allocated"]), str(t["total_spent"]), str(t["total_remaining"]), str(t["pct_used"])])
+    writer.writerow([])
+    writer.writerow(totals_row)
+
+    output.seek(0)
+    fy_labels = "_vs_".join(fy.label for fy in fys)
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=fy_comparison_{department.slug}_{fy_labels}.csv"},
+    )
+
+
+@reports_bp.route("/fy-comparison")
+@login_required
+@global_admin_required
+def global_fy_comparison():
+    """Global fiscal year comparison — pick a department and compare FYs."""
+    all_fys = FiscalYear.query.order_by(FiscalYear.start_date.desc()).all()
+    departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+    dept_id = request.args.get("department", type=int)
+    selected_fy_ids = _get_comparison_fy_ids()
+
+    comparison = None
+    selected_department = None
+    if dept_id and len(selected_fy_ids) >= 2:
+        selected_department = Department.query.get(dept_id)
+        if selected_department:
+            comparison = get_fy_comparison(selected_department.id, selected_fy_ids)
+
+    return render_template(
+        "reports/fy_comparison_global.html",
+        all_fiscal_years=all_fys,
+        departments=departments,
+        selected_dept_id=dept_id,
+        selected_department=selected_department,
+        selected_fy_ids=selected_fy_ids,
+        comparison=comparison,
+    )
+
+
+@reports_bp.route("/fy-comparison/export")
+@login_required
+@global_admin_required
+def global_fy_comparison_export():
+    """Export global FY comparison as CSV."""
+    dept_id = request.args.get("department", type=int)
+    selected_fy_ids = _get_comparison_fy_ids()
+
+    if not dept_id or len(selected_fy_ids) < 2:
+        return redirect(url_for("reports.global_fy_comparison"))
+
+    department = Department.query.get_or_404(dept_id)
+    comparison = get_fy_comparison(department.id, selected_fy_ids)
+    fys = comparison["fiscal_years"]
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    header = ["Line Item Code", "Line Item Name"]
+    for fy in fys:
+        header.extend([f"Allocated ({fy.label})", f"Spent ({fy.label})", f"Remaining ({fy.label})", f"% Used ({fy.label})"])
+    writer.writerow(header)
+
+    for row in comparison["rows"]:
+        csv_row = [row["line_item"].code, row["line_item"].name]
+        for fy in fys:
+            y = row["years"][fy.id]
+            csv_row.extend([str(y["allocated"]), str(y["spent"]), str(y["remaining"]), str(y["pct_used"])])
+        writer.writerow(csv_row)
+
+    totals_row = ["TOTALS", ""]
+    for fy in fys:
+        t = comparison["totals"][fy.id]
+        totals_row.extend([str(t["total_allocated"]), str(t["total_spent"]), str(t["total_remaining"]), str(t["pct_used"])])
+    writer.writerow([])
+    writer.writerow(totals_row)
+
+    output.seek(0)
+    fy_labels = "_vs_".join(fy.label for fy in fys)
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=fy_comparison_{department.slug}_{fy_labels}.csv"},
     )
