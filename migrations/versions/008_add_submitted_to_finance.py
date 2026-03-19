@@ -17,7 +17,7 @@ depends_on = None
 def upgrade():
     op.add_column(
         "purchases",
-        sa.Column("submitted_to_finance", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("submitted_to_finance", sa.Boolean(), nullable=False, server_default=sa.text("false")),
     )
 
 
