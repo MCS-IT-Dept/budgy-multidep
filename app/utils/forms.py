@@ -140,6 +140,23 @@ class ApprovalThresholdForm(FlaskForm):
     label = StringField("Description (optional)", validators=[Optional(), Length(max=255)])
 
 
+class BudgetAmendmentForm(FlaskForm):
+    board_approval_date = DateField("Board Approval Date", validators=[Optional()])
+    change_amount = DecimalField(
+        "Amendment Amount ($)",
+        validators=[DataRequired()],
+        places=2,
+    )
+    description = TextAreaField(
+        "Description / Reason",
+        validators=[DataRequired(), Length(max=500)],
+    )
+    approved_by_name = StringField(
+        "Approved By (e.g. School Board, Superintendent)",
+        validators=[Optional(), Length(max=255)],
+    )
+
+
 class BrandingForm(FlaskForm):
     organization_name = StringField(
         "Organization Name", validators=[Optional(), Length(max=255)]

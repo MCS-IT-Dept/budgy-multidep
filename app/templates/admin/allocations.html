@@ -6,6 +6,7 @@
     <div class="d-flex gap-2">
         <a href="{{ url_for('admin.allocation_create', dept_id=department.id) }}" class="btn btn-primary btn-sm">New Allocation</a>
         <a href="{{ url_for('admin.allocation_import', dept_id=department.id) }}" class="btn btn-outline-info btn-sm">Import CSV</a>
+        <a href="{{ url_for('admin.amendments', dept_id=department.id) }}" class="btn btn-outline-warning btn-sm"><i class="bi bi-journal-text"></i> Amendment Log</a>
         {% if current_user.is_global_admin %}
         <a href="{{ url_for('admin.departments') }}" class="btn btn-outline-secondary btn-sm">Back</a>
         {% endif %}
@@ -24,7 +25,7 @@
 <div class="table-responsive">
     <table class="table table-hover">
         <thead class="table-light">
-            <tr><th>Fiscal Year</th><th>Line Item Code</th><th>Line Item Name</th><th class="text-end">Allocated Amount</th><th></th></tr>
+            <tr><th>Fiscal Year</th><th>Line Item Code</th><th>Line Item Name</th><th class="text-end">Allocated Amount</th><th class="text-center">Amendments</th><th></th></tr>
         </thead>
         <tbody>
             {% for a in allocations %}
@@ -33,7 +34,18 @@
                 <td><strong>{{ a.line_item.code }}</strong></td>
                 <td>{{ a.line_item.name }}</td>
                 <td class="text-end">${{ "{:,.2f}".format(a.allocated_amount) }}</td>
-                <td><a href="{{ url_for('admin.allocation_edit', dept_id=department.id, id=a.id) }}" class="btn btn-sm btn-outline-primary">Edit</a></td>
+                <td class="text-center">
+                    {% set count = a.amendments.count() %}
+                    {% if count > 0 %}
+                    <span class="badge bg-warning text-dark">{{ count }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="d-flex gap-1">
+                        <a href="{{ url_for('admin.allocation_edit', dept_id=department.id, id=a.id) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+                        <a href="{{ url_for('admin.amendment_create', dept_id=department.id, alloc_id=a.id) }}" class="btn btn-sm btn-outline-warning" title="Record amendment"><i class="bi bi-journal-plus"></i></a>
+                    </div>
+                </td>
             </tr>
             {% endfor %}
         </tbody>
